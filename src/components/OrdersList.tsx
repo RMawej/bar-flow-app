@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,27 +20,27 @@ interface Order {
 }
 
 const OrdersList = () => {
-  const { token, barId } = useAuthStore();
+  const { token, barId, userId } = useAuthStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchOrders = async () => {
     if (!token || !barId) return;
-    
+
     setIsLoading(true);
     try {
       const response = await fetch(`https://kpsule.app/api/bars/${barId}/commands`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId,
         },
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setOrders(data);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des commandes:', error);
+      console.error("Erreur lors du chargement des commandes:", error);
       toast({
         title: "Erreur",
         description: "Impossible de charger les commandes",
@@ -54,30 +53,40 @@ const OrdersList = () => {
 
   useEffect(() => {
     fetchOrders();
-    // Refresh orders every 30 seconds
-    const interval = setInterval(fetchOrders, 30000);
-    return () => clearInterval(interval);
   }, [token, barId]);
+
+  useEffect(() => {
+    if (!barId) return;
+    const socket = new WebSocket(`wss://kpsule.app/ws/${barId}`);
+  
+    socket.onmessage = (event) => {
+      const newOrder = JSON.parse(event.data);
+      setOrders((prev) => [newOrder, ...prev]);
+    };
+  
+    return () => socket.close();
+  }, [barId]);
+  
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'preparing':
-        return 'bg-blue-100 text-blue-800';
-      case 'ready':
-        return 'bg-green-100 text-green-800';
-      case 'delivered':
-        return 'bg-gray-100 text-gray-800';
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "preparing":
+        return "bg-blue-100 text-blue-800";
+      case "ready":
+        return "bg-green-100 text-green-800";
+      case "delivered":
+        return "bg-gray-100 text-gray-800";
       default:
-        return 'bg-gray-100 text-gray-800';
+        return "bg-gray-100 text-gray-800";
     }
   };
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(dateString).toLocaleTimeString("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -89,7 +98,7 @@ const OrdersList = () => {
           <p className="text-gray-600">Gérez les commandes reçues de vos clients</p>
         </div>
         <Badge variant="outline" className="border-orange-300 text-orange-700">
-          {orders.length} commande{orders.length !== 1 ? 's' : ''}
+          {orders.length} commande{orders.length !== 1 ? "s" : ""}
         </Badge>
       </div>
 

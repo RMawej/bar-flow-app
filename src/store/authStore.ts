@@ -5,6 +5,7 @@ import { persist } from 'zustand/middleware';
 interface AuthState {
   token: string | null;
   barId: string | null;
+  userId: string | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
@@ -16,6 +17,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       token: null,
       barId: null,
+      userId: null,
       isAuthenticated: false,
       login: async (email: string, password: string) => {
         try {
@@ -32,6 +34,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               token: data.token,
               barId: data.bar_id,
+              userId: data.user_id,
               isAuthenticated: true,
             });
             return true;

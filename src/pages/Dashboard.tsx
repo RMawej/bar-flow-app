@@ -9,6 +9,8 @@ import ItemsManager from "@/components/ItemsManager";
 import OrdersList from "@/components/OrdersList";
 import PlaylistManager from "@/components/PlaylistManager";
 import MenuScanner from "@/components/MenuScanner";
+import QRCode from "react-qr-code";
+
 
 const Dashboard = () => {
   const { logout, barId } = useAuthStore();
@@ -29,7 +31,7 @@ const Dashboard = () => {
               <Music className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">Dashboard KPsule</h1>
+              <h1 className="text-xl font-bold text-gray-800">Votre Dashboard</h1>
               <p className="text-sm text-gray-600">Gestion de votre établissement</p>
             </div>
           </div>
@@ -55,7 +57,7 @@ const Dashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
                 <code className="bg-white/20 px-3 py-2 rounded text-sm flex-1 truncate">
                   {publicUrl}
                 </code>
@@ -66,6 +68,9 @@ const Dashboard = () => {
                 >
                   Copier
                 </Button>
+              </div>
+              <div className="mt-4 flex justify-center bg-white p-4 rounded">
+                <QRCode value={publicUrl} size={128} />
               </div>
             </CardContent>
           </Card>
@@ -107,6 +112,29 @@ const Dashboard = () => {
             <PlaylistManager />
           </TabsContent>
         </Tabs>
+        {/*
+        <div className="mt-6 text-center">
+          <Button
+            onClick={async () => {
+              try {
+                const reg = await navigator.serviceWorker.register("/sw.js");
+                const sub = await reg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey:
+                    "BDwFtxs1cVZj0zuFZveuoQbQzZ36RjOhU6ljtsWxQvesjfWLZL9et5VSFVfSwmyHqsGGyG1E8fG_6Bs8oCFOpRo",
+                });
+                localStorage.setItem("pushSubscription", JSON.stringify(sub));
+                alert("✅ Notifications activées !");
+              } catch (err) {
+                alert("❌ Échec de l'activation : " + err);
+              }
+            }}
+            className="bg-orange-600 hover:bg-orange-700 text-white"
+          >
+            🔔 Activer les notifications
+          </Button>
+        </div>
+        */}
       </main>
     </div>
   );
