@@ -17,6 +17,8 @@ interface Order {
   total: number;
   status: string;
   created_at: string;
+  pickup_code?: string;
+  pickup_color?: string;
 }
 
 const OrdersList = () => {
@@ -61,27 +63,29 @@ const OrdersList = () => {
   
     socket.onmessage = (event) => {
       const newOrder = JSON.parse(event.data);
-      setOrders((prev) => [newOrder, ...prev]);
+      if (!newOrder.id || !Array.isArray(newOrder.items)) return;
+      setOrders((prev) => [newOrder, ...prev]);      
     };
   
     return () => socket.close();
   }, [barId]);
   
-
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string | undefined) => {
+    if (!status) return "bg-gray-100 text-gray-800";
     switch (status.toLowerCase()) {
       case "pending":
         return "bg-yellow-100 text-yellow-800";
-      case "preparing":
+      case "in_progress":
         return "bg-blue-100 text-blue-800";
       case "ready":
         return "bg-green-100 text-green-800";
-      case "delivered":
-        return "bg-gray-100 text-gray-800";
+      case "done":
+        return "bg-gray-300 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
+  
 
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString("fr-FR", {
@@ -117,46 +121,127 @@ const OrdersList = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
           {orders.map((order) => (
-            <Card key={order.id} className="bg-white/80 backdrop-blur-sm border-orange-200 hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center space-x-2">
-                    <User className="h-5 w-5 text-orange-600" />
-                    <span>{order.client_name}</span>
-                  </CardTitle>
-                  <Badge className={getStatusColor(order.status)}>
-                    {order.status}
-                  </Badge>
-                </div>
-                <CardDescription className="flex items-center space-x-2">
-                  <Clock className="h-4 w-4" />
-                  <span>{formatTime(order.created_at)}</span>
-                  <span>• Commande #{order.id}</span>
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {order.items.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                      <div>
-                        <p className="font-medium">{item.item_name}</p>
-                        <p className="text-sm text-gray-600">Quantité: {item.quantity}</p>
-                      </div>
-                      <p className="font-semibold text-orange-600">
-                        {(item.price * item.quantity).toFixed(2)}€
-                      </p>
-                    </div>
-                  ))}
-                  <div className="pt-3 border-t border-orange-200">
-                    <div className="flex items-center justify-between">
-                      <p className="text-lg font-bold">Total</p>
-                      <p className="text-xl font-bold text-orange-600">{order.total.toFixed(2)}€</p>
-                    </div>
+            <div className="relative" key={order.id}>
+              <Card className="bg-white/80 backdrop-blur-sm border-orange-200 hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center space-x-2">
+                      <User className="h-5 w-5 text-orange-600" />
+                      <span>{order.client_name}</span>
+                    </CardTitle>
+                    <Badge
+                      onClick={async () => {
+                        const next = {
+                          pending: "in_progress",
+                          in_progress: "ready",
+                          ready: "done",
+                          done: "pending",
+                        }[order.status] || "pending";
+
+                        try {
+                          const res = await fetch(`https://kpsule.app/api/bars/${barId}/commands/${order.id}/status`, {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                              "x-user-id": userId,
+                            },
+                            body: JSON.stringify({ status: next }),
+                          });
+                          if (res.ok) {
+                            setOrders((prev) =>
+                              prev.map((o) =>
+                                o.id === order.id ? { ...o, status: next } : o
+                              )
+                            );
+                          }
+                          
+                        } catch (e) {
+                          toast({
+                            title: "Erreur",
+                            description: "Impossible de changer le statut",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                      className={`${getStatusColor(order.status)} cursor-pointer`}
+                    >
+                      {order.status}
+                    </Badge>
                   </div>
+                  <CardDescription className="flex items-center space-x-2">
+                    <Clock className="h-4 w-4" />
+                    <span>{formatTime(order.created_at)}</span>
+                    <span>• Commande #{order.id}</span>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                  {console.log("🧾 Items de la commande", order.id, order.items) || order.items?.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                        <div>
+                          <p className="font-medium">{item.item_name}</p>
+                          <p className="text-sm text-gray-600">Quantité: {item.quantity}</p>
+                        </div>
+                        <p className="font-semibold text-orange-600">
+                          {(item.price * item.quantity).toFixed(2)}€
+                        </p>
+                      </div>
+                    ))}
+                    <div className="pt-3 border-t border-orange-200">
+                      <div className="flex items-center justify-between">
+                        <p className="text-lg font-bold">Total</p>
+                        <p className="text-xl font-bold text-orange-600">{order.total.toFixed(2)}€</p>
+                      </div>
+                    </div>
+                    {order.pickup_code && order.status !== "ready" && (
+                      <p className="text-sm text-gray-700 mt-2">Code retrait : <strong>{order.pickup_code}</strong></p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {order.status === "ready" && order.pickup_code && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center text-white text-4xl font-bold cursor-pointer"
+                  style={{
+                    backgroundColor: order.pickup_color || "#000000cc",
+                    borderRadius: "0.5rem",
+                  }}
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`https://kpsule.app/api/bars/${barId}/commands/${order.id}/status`, {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          "x-user-id": userId,
+                        },
+                        body: JSON.stringify({ status: "done" }),
+                      });
+
+                      if (res.ok) {
+                        setOrders((prev) =>
+                          prev.map((o) =>
+                            o.id === order.id ? { ...o, status: "done" } : o
+                          )
+                        );
+                      }
+                    } catch (e) {
+                      toast({
+                        title: "Erreur",
+                        description: "Impossible de passer la commande en done",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                >
+                  {order.pickup_code}
                 </div>
-              </CardContent>
-            </Card>
+              )}
+
+            </div>
+
           ))}
         </div>
       )}

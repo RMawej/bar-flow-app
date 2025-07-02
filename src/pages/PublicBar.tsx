@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Music, ShoppingCart, Plus, Minus, ThumbsUp, Send } from "lucide-react";
+import WhackAMole from "@/components/WhackAMole";
+import InfiniteTicTacToe from "@/components/InfiniteTicTacToe";
 
 interface Item {
   id: number;
@@ -38,13 +40,19 @@ const PublicBar = () => {
   const [newTrackName, setNewTrackName] = useState("");
   const [newSpotifyUrl, setNewSpotifyUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [pickupCode, setPickupCode] = useState<string | null>(null);
+  const [pickupColor, setPickupColor] = useState<string | null>(null);
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [currentCommand, setCurrentCommand] = useState<any>(null);
+  const [lastCommand, setLastCommand] = useState<any>(null);
 
   const fetchItems = async () => {
     try {
       const response = await fetch(`https://kpsule.app/api/bars/${barId}/items`);
       if (response.ok) {
         const data = await response.json();
-        setItems(data);
+        setItems(data.items);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des items:', error);
@@ -53,7 +61,7 @@ const PublicBar = () => {
 
   const fetchPlaylist = async () => {
     try {
-      const response = await fetch(`https://kpsule.app/api/bars/${barId}/playlist`);
+      const response = await fetch(`https://kpsule.app/api/public/bars/${barId}/playlist`);
       if (response.ok) {
         const data = await response.json();
         setTracks(data);
@@ -65,24 +73,108 @@ const PublicBar = () => {
 
   useEffect(() => {
     if (barId) {
+      // 🔁 Charger nom & téléphone sauvegardés
+      const savedName = localStorage.getItem("client_name");
+      const savedPhone = localStorage.getItem("phone_number");
+      if (savedName) setClientName(savedName);
+      if (savedPhone) setPhoneNumber(savedPhone);
+  
       fetchItems();
       fetchPlaylist();
+  
+      const savedId = localStorage.getItem("client_id");
+      console.log("Saved Client ID:", savedId);
+      if (savedId) {
+        fetch(`https://kpsule.app/api/public/bars/${barId}/commands/by-client?client_id=${savedId}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data?.id) setCurrentCommand(data);
+          });
+      }
+      if (!savedId) {
+        const lastCmd = localStorage.getItem("last_command");
+        if (lastCmd) {
+          try {
+            setLastCommand(JSON.parse(lastCmd));
+          } catch {}
+        }
+      }
+      
     }
   }, [barId]);
+  
+
+  useEffect(() => {
+    if (!barId || !currentCommand) return;
+  
+    const clientId = localStorage.getItem("client_id");
+    const socket = new WebSocket(`wss://kpsule.app/ws/${barId}?client_id=${clientId}`);
+  
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (
+        message.type === "command_update" &&
+        message.command?.id === currentCommand.id
+      ) {
+        setCurrentCommand((prev: any) => {
+          const isNowReady = prev.status !== "ready" && message.command.status === "ready";
+          const isNowDone = message.command.status === "done";
+      
+          if (isNowReady) {
+            toast({
+              title: "🥤 Votre drink est prêt !",
+              description: "Rendez-vous au bar pour le récupérer.",
+            });
+          }
+      
+          if (message.command.pickup_code) {
+            setPickupCode(message.command.pickup_code);
+            setPickupColor(message.command.pickup_color);
+          }
+      
+          if (isNowDone) {
+            localStorage.setItem("last_command", JSON.stringify(prev));
+            localStorage.removeItem("client_id");
+            setLastCommand(prev); // facultatif si tu veux aussi en RAM
+            return null;
+          }
+          
+      
+          return { ...prev, status: message.command.status };
+        });
+      }
+      
+    };
+  
+    return () => socket.close();
+  }, [barId, currentCommand?.id]);
+  
+  
+
+
 
   const addToCart = (item: Item) => {
     setCart(prev => {
       const existing = prev.find(cartItem => cartItem.id === item.id);
-      if (existing) {
-        return prev.map(cartItem =>
-          cartItem.id === item.id
-            ? { ...cartItem, quantity: cartItem.quantity + 1 }
-            : cartItem
-        );
-      }
-      return [...prev, { ...item, quantity: 1 }];
+      const updatedCart = existing
+        ? prev.map(cartItem =>
+            cartItem.id === item.id
+              ? { ...cartItem, quantity: cartItem.quantity + 1 }
+              : cartItem
+          )
+        : [...prev, { ...item, quantity: 1 }];
+  
+      const total = updatedCart.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  
+      toast({
+        title: `${item.name} ajouté au panier`,
+        description: `Total : ${total.toFixed(2)}€`,
+      });
+  
+      return updatedCart;
     });
   };
+  
 
   const removeFromCart = (itemId: number) => {
     setCart(prev => {
@@ -119,25 +211,48 @@ const PublicBar = () => {
         quantity: item.quantity,
       }));
 
-      const response = await fetch(`https://kpsule.app/api/bars/${barId}/commands`, {
+      const response = await fetch(`https://kpsule.app/api/public/bars/${barId}/commands`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           client_name: clientName,
+          phone: phoneNumber,
           items: orderItems,
         }),
-      });
+      });      
 
       if (response.ok) {
         toast({
           title: "Commande envoyée",
           description: "Votre commande a été transmise au bar !",
         });
+        const clientId = crypto.subtle
+          ? await crypto.subtle.digest("SHA-256", new TextEncoder().encode(phoneNumber)).then(buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''))
+          : "";
+
+        localStorage.setItem("client_id", clientId);
+        localStorage.setItem("client_name", clientName);
+        localStorage.setItem("phone_number", phoneNumber);
+
+
+        const data = await response.json();
+        setCurrentCommand({
+          id: data.command_id,
+          items: cart.map(item => ({
+            item_id: item.id,
+            item_name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+          })),
+          status: "pending",
+          total: getTotalPrice(),
+        });
+        
+
         setCart([]);
-        setClientName("");
-      } else {
+        } else {
         throw new Error('Erreur lors de la commande');
       }
     } catch (error) {
@@ -245,6 +360,122 @@ const PublicBar = () => {
           </TabsList>
 
           <TabsContent value="menu" className="space-y-6">
+          {currentCommand ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Commande en cours</CardTitle>
+                <CardDescription>ID : {currentCommand.id}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                
+              {currentCommand.items.map((item: any, index: number) => {
+              console.log(item);
+              return (
+                <div key={item.item_id || item.id || index} className="flex justify-between">
+
+                    <span>{item.item_name} × {item.quantity}</span>
+                    <span>{(item.price * item.quantity).toFixed(2)}€</span>
+                  </div>
+                );
+              })}
+                <div className="text-right font-bold text-orange-600">
+                  Total : {currentCommand.total.toFixed(2)}€
+                </div>
+                <Badge
+                    className={
+                      currentCommand.status === "pending"
+                        ? "bg-gray-400 text-white"
+                        : currentCommand.status === "in_progress"
+                        ? "bg-yellow-400 text-white"
+                        : currentCommand.status === "ready"
+                        ? "bg-green-500 text-white"
+                        : currentCommand.status === "done"
+                        ? "bg-blue-500 text-white"
+                        : "bg-slate-500 text-white"
+                    }
+                  >
+                    {currentCommand.status === "pending"
+                      ? "En attente ⏳"
+                      : currentCommand.status === "in_progress"
+                      ? "En préparation 🍹"
+                      : currentCommand.status === "ready"
+                      ? "Prêt 🥤"
+                      : currentCommand.status === "done"
+                      ? "Récupéré ✅"
+                      : currentCommand.status}
+                  </Badge>
+
+
+                  <div className="mt-6 text-center">
+                  {currentCommand.status === "ready" ? (
+                    <button
+                      onClick={() => setShowCodeModal(true)}
+                      className="inline-block px-8 py-6 rounded-xl text-3xl font-bold shadow-lg transition-all duration-300"
+                      style={{
+                        backgroundColor: pickupColor || "#22c55e",
+                        color: "#fff",
+                        animation: "bounce 1.5s ease-in-out infinite",
+                        animationName: "bounce",
+                        animationDuration: "1s",
+                        animationTimingFunction: "ease-in-out",
+                        animationIterationCount: "infinite",
+                        animationDirection: "normal",
+                        animationFillMode: "none",
+                        animationPlayState: "running",
+                        animationDelay: "0s",
+                        animationKeyframes: {
+                          "0%": { transform: "translateY(0)" },
+                          "50%": { transform: "translateY(-5px)" },
+                          "100%": { transform: "translateY(0)" },
+                        }
+                      }}
+                    >
+                      🥤 Prêt ! Cliquez pour voir votre code
+                    </button>
+
+                  ) : (
+                    <div
+                      className={
+                        `inline-block px-6 py-4 rounded-xl text-2xl font-bold shadow-md ` +
+                        (currentCommand.status === "pending"
+                          ? "bg-gray-400 text-white"
+                          : currentCommand.status === "in_progress"
+                          ? "bg-yellow-400 text-white"
+                          : currentCommand.status === "done"
+                          ? "bg-blue-500 text-white"
+                          : "bg-slate-500 text-white")
+                      }
+                    >
+                      {currentCommand.status === "pending"
+                        ? "⏳ En attente"
+                        : currentCommand.status === "in_progress"
+                        ? "🍹 En préparation"
+                        : currentCommand.status === "done"
+                        ? "✅ Récupéré"
+                        : currentCommand.status}
+                    </div>
+                  )}
+
+
+                    <Tabs defaultValue="game1" className="w-full mt-6">
+                      <TabsList className="grid w-full grid-cols-2 mb-4">
+                        <TabsTrigger value="game1">Solo</TabsTrigger>
+                        <TabsTrigger value="game2">1v1</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="game1">
+                        <WhackAMole />
+                      </TabsContent>
+                      <TabsContent value="game2">
+                        <InfiniteTicTacToe />
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+
+
+              </CardContent>
+            </Card>
+
+          ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Notre Menu</h2>
@@ -294,7 +525,36 @@ const PublicBar = () => {
                         onChange={(e) => setClientName(e.target.value)}
                         placeholder="Ex: Léo"
                       />
+                      <Label htmlFor="phoneNumber">Téléphone</Label>
+                      <Input
+                        id="phoneNumber"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        placeholder="Ex: +1 234 567 8901"
+                      />
                     </div>
+                    {lastCommand?.items?.length > 0 && (
+                      <Button
+                        variant="outline"
+                        className="w-full mb-2"
+                        onClick={() => {
+                          const map = new Map<number, CartItem>();
+                          for (const item of lastCommand.items) {
+                            const existing = items.find(i => i.id === item.id || i.id === item.item_id);
+                            if (existing) {
+                              map.set(item.item_id, {
+                                ...existing,
+                                quantity: item.quantity,
+                              });
+                            }
+                          }
+                          setCart([...map.values()]);
+                          toast({ title: "Commande rechargée dans le panier." });
+                        }}
+                      >
+                        Recommander la même chose
+                      </Button>
+                    )}
 
                     {cart.length === 0 ? (
                       <p className="text-gray-500 text-center py-4">Votre panier est vide</p>
@@ -335,6 +595,7 @@ const PublicBar = () => {
                               {getTotalPrice().toFixed(2)}€
                             </p>
                           </div>
+
                           <Button
                             onClick={handleOrder}
                             className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
@@ -349,6 +610,7 @@ const PublicBar = () => {
                 </Card>
               </div>
             </div>
+              )}
           </TabsContent>
 
           <TabsContent value="music" className="space-y-6">
@@ -419,9 +681,32 @@ const PublicBar = () => {
             </div>
           </TabsContent>
         </Tabs>
+        {showCodeModal && (
+          <div
+            className="fixed inset-0 z-50 flex flex-col justify-center items-center text-center"
+            style={{ backgroundColor: pickupColor || "#22c55e" }}
+          >
+            <h2 className="text-4xl font-bold mb-8 text-black">Votre code de retrait</h2>
+            <div
+              className="text-6xl font-extrabold px-10 py-6 rounded-2xl shadow-xl mb-8 bg-black text-white"
+            >
+              {pickupCode}
+            </div>
+            <Button
+              onClick={() => setShowCodeModal(false)}
+              className="text-lg font-semibold bg-black text-white"
+            >
+              Fermer
+            </Button>
+          </div>
+        )}
+
+
       </main>
     </div>
   );
 };
 
+
 export default PublicBar;
+
