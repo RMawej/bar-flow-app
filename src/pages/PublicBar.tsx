@@ -11,6 +11,8 @@ import { toast } from "@/hooks/use-toast";
 import { Music, ShoppingCart, Plus, Minus, ThumbsUp, Send } from "lucide-react";
 import WhackAMole from "@/components/WhackAMole";
 import InfiniteTicTacToe from "@/components/InfiniteTicTacToe";
+import { renderItemCard } from "@/components/ItemCardVariants";
+import { useRef } from "react";
 
 interface Item {
   id: number;
@@ -46,6 +48,9 @@ const PublicBar = () => {
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [currentCommand, setCurrentCommand] = useState<any>(null);
   const [lastCommand, setLastCommand] = useState<any>(null);
+  const [viewStyle, setViewStyle] = useState<"1"| "3" | "5">("3");
+  const orderSectionRef = useRef<HTMLDivElement | null>(null);
+  const [showCartModal, setShowCartModal] = useState(false);
 
   const fetchItems = async () => {
     try {
@@ -53,11 +58,12 @@ const PublicBar = () => {
       if (response.ok) {
         const data = await response.json();
         setItems(data.items);
+        console.log("Items reçus :", data.items); // 👈 ici
       }
     } catch (error) {
       console.error('Erreur lors du chargement des items:', error);
     }
-  };
+  };  
 
   const fetchPlaylist = async () => {
     try {
@@ -334,24 +340,32 @@ const PublicBar = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
-      <header className="bg-white/80 backdrop-blur-sm border-b border-orange-200 shadow-sm">
-        <div className="container mx-auto px-4 py-6 text-center">
+      <header className="relative bg-white/80 backdrop-blur-sm border-b border-orange-200 shadow-sm sticky top-0 z-40">
+          <div className="container mx-auto px-4 py-6 text-center">
           <div className="h-12 w-12 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center mx-auto mb-3">
             <Music className="h-6 w-6 text-white" />
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-            Bienvenue
-          </h1>
           <p className="text-gray-600 mt-1">Commandez et votez pour la musique !</p>
         </div>
-      </header>
+        </header>
+        <div className="fixed top-4 right-4 z-50 cursor-pointer" onClick={() => setShowCartModal(true)}>
+          <div className="relative">
+            <ShoppingCart className="h-10 w-10 text-orange-600" />
+            {cart.length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                {cart.reduce((sum, item) => sum + item.quantity, 0)}
+              </span>
+            )}
+          </div>
+        </div>
 
       <main className="container mx-auto px-4 py-8">
+
         <Tabs defaultValue="menu" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 bg-white/60 backdrop-blur-sm">
             <TabsTrigger value="menu" className="flex items-center space-x-2">
               <ShoppingCart className="h-4 w-4" />
-              <span>Menu & Commande</span>
+              <span>Commande</span>
             </TabsTrigger>
             <TabsTrigger value="music" className="flex items-center space-x-2">
               <Music className="h-4 w-4" />
@@ -478,37 +492,30 @@ const PublicBar = () => {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
+                  <div className="flex gap-2 mb-4">
+                    {[].map(num => (
+                      <Button
+                        key={num}
+                        variant={viewStyle === `${num}` ? "default" : "outline"}
+                        onClick={() => setViewStyle(`${num}` as any)}
+                      >
+                        Design {num}
+                      </Button>
+                    ))}
+                </div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Notre Menu</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {items.map((item) => (
-                    <Card key={item.id} className="bg-white/80 backdrop-blur-sm border-orange-200 hover:shadow-lg transition-shadow">
-                      <CardContent className="p-4">
-                        {item.image && (
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="w-full h-32 object-cover rounded-md mb-3"
-                          />
-                        )}
-                        <h3 className="font-semibold text-lg text-gray-800">{item.name}</h3>
-                        <p className="text-2xl font-bold text-orange-600 mb-2">{item.price}€</p>
-                        {item.description && (
-                          <p className="text-gray-600 text-sm mb-3">{item.description}</p>
-                        )}
-                        <Button
-                          onClick={() => addToCart(item)}
-                          className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Ajouter au panier
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
+                {items.map((item) => renderItemCard(
+                  item,
+                  viewStyle,
+                  () => addToCart(item),
+                  () => removeFromCart(item.id),
+                  cart.find(i => i.id === item.id)?.quantity || 0
+                ))}
                 </div>
               </div>
 
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1" ref={orderSectionRef}>
                 <Card className="bg-white/80 backdrop-blur-sm border-orange-200 sticky top-4">
                   <CardHeader>
                     <CardTitle>Votre Commande</CardTitle>
@@ -700,6 +707,115 @@ const PublicBar = () => {
             </Button>
           </div>
         )}
+
+      {showCartModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+          <div className="bg-white max-w-md w-full rounded-xl p-6 relative overflow-y-auto max-h-[90vh]">
+            <button
+              onClick={() => setShowCartModal(false)}
+              className="absolute top-3 right-3 text-gray-500 hover:text-black"
+            >
+              ✕
+            </button>
+            <h2 className="text-2xl font-bold mb-4">Votre Commande</h2>
+
+            {/* 👉 Contenu copié depuis la colonne droite */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="clientName">Votre nom</Label>
+                <Input
+                  id="clientName"
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  placeholder="Ex: Léo"
+                />
+                <Label htmlFor="phoneNumber">Téléphone</Label>
+                <Input
+                  id="phoneNumber"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="Ex: +1 234 567 8901"
+                />
+              </div>
+
+              {cart.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">Votre panier est vide</p>
+              ) : (
+                <>
+                  <div className="space-y-3 overflow-y-auto max-h-[50vh] pr-2">
+                    {cart.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between py-2 border-b border-gray-100 gap-3"
+                      >
+                        {/* Image + nom/infos */}
+                        <div className="flex items-center gap-3 flex-1">
+                          {item.image_url && (
+                            <img
+                              src={item.image_url}
+                              alt={item.name}
+                              className="w-12 h-12 object-cover rounded-md border"
+                            />
+                          )}
+                          <div>
+                            <p className="font-medium">{item.name}</p>
+                            <p className="text-sm text-gray-600">
+                              {item.price}€ × {item.quantity}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Boutons + / - */}
+                        <div className="flex items-center space-x-2">
+                          <Button size="sm" variant="outline" onClick={() => removeFromCart(item.id)}>
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-6 text-center">{item.quantity}</span>
+                          <Button size="sm" variant="outline" onClick={() => addToCart(item)}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="pt-3 border-t border-orange-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-lg font-bold">Total</p>
+                      <p className="text-xl font-bold text-orange-600">
+                        {getTotalPrice().toFixed(2)}€
+                      </p>
+                    </div>
+
+                    <Button
+                      onClick={handleOrder}
+                      className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? "Envoi..." : "Commander"}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+    {!currentCommand && !showCartModal && (
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-t border-orange-200 shadow-md px-4 py-3 flex justify-between items-center">
+        <div className="text-lg font-bold text-orange-600">
+          Total : {getTotalPrice().toFixed(2)}€
+        </div>
+        <Button
+          onClick={() => setShowCartModal(true)}
+          className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+          disabled={isLoading}
+        >
+          Commander
+        </Button>
+      </div>
+    )}
+
 
 
       </main>

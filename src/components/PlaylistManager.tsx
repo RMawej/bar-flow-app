@@ -19,8 +19,12 @@ interface Track {
 }
 
 const getSpotifyToken = async () => {
-  const clientId = "69b62c73c32e4e18bc6e3e8a8bd96171";
-  const clientSecret = "91af69e5066948f5acf772ee116446d2";
+  const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+  const clientSecret = import.meta.env.VITE_SPOTIFY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    console.error("Spotify client ID or secret not found in environment variables");
+    return null;
+  }
   const credentials = btoa(`${clientId}:${clientSecret}`);
 
   const res = await fetch("https://accounts.spotify.com/api/token", {

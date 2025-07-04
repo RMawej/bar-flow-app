@@ -48,7 +48,10 @@ const Toast = React.forwardRef<
       ref={ref}
       className={cn(toastVariants({ variant }), className)}
       {...props}
-    />
+    >
+      {props.children}
+      <ProgressBar duration={5000} />
+    </ToastPrimitives.Root>
   )
 })
 Toast.displayName = ToastPrimitives.Root.displayName
@@ -113,7 +116,30 @@ ToastDescription.displayName = ToastPrimitives.Description.displayName
 type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
 
 type ToastActionElement = React.ReactElement<typeof ToastAction>
+const ProgressBar = ({ duration }: { duration: number }) => {
+  const [width, setWidth] = React.useState(100)
 
+  React.useEffect(() => {
+    const interval = 50
+    const decrement = 100 / (duration / interval)
+
+    const id = setInterval(() => {
+      setWidth((prev) => {
+        if (prev <= 0) {
+          clearInterval(id)
+          return 0
+        }
+        return prev - decrement
+      })
+    }, interval)
+
+    return () => clearInterval(id)
+  }, [duration])
+
+  return (
+    <div className="absolute bottom-0 left-0 h-1 bg-green-500 transition-all" style={{ width: `${width}%` }} />
+  )
+}
 export {
   type ToastProps,
   type ToastActionElement,

@@ -20,8 +20,7 @@ interface Order {
   pickup_code?: string;
   pickup_color?: string;
 }
-
-const OrdersList = () => {
+const OrdersList = ({ filter }: { filter: "all" | "done" | "not_done" }) => {
   const { token, barId, userId } = useAuthStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -69,6 +68,13 @@ const OrdersList = () => {
   
     return () => socket.close();
   }, [barId]);
+
+  const filteredOrders = orders.filter((order) => {
+    if (filter === "done") return order.status === "done";
+    if (filter === "not_done") return order.status !== "done";
+    return true;
+  });
+  
   
   const getStatusColor = (status: string | undefined) => {
     if (!status) return "bg-gray-100 text-gray-800";
@@ -102,7 +108,7 @@ const OrdersList = () => {
           <p className="text-gray-600">Gérez les commandes reçues de vos clients</p>
         </div>
         <Badge variant="outline" className="border-orange-300 text-orange-700">
-          {orders.length} commande{orders.length !== 1 ? "s" : ""}
+          {filteredOrders.length} commande{filteredOrders.length !== 1 ? "s" : ""}
         </Badge>
       </div>
 
@@ -122,7 +128,7 @@ const OrdersList = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {orders.map((order) => (
+          {filteredOrders.map((order) => (
             <div className="relative" key={order.id}>
               <Card className="bg-white/80 backdrop-blur-sm border-orange-200 hover:shadow-lg transition-shadow">
                 <CardHeader>

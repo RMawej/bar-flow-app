@@ -6,6 +6,8 @@ import Dashboard from "./Dashboard";
 import PublicBar from "./PublicBar";
 import { useAuthStore } from "@/store/authStore";
 
+import BarTender from "./BarTender";
+
 const Index = () => {
   const { token, checkAuth } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
@@ -34,6 +36,7 @@ const Index = () => {
           path="/dashboard" 
           element={token ? <Dashboard /> : <Navigate to="/login" />} 
         />
+        <Route path="/bartender" element={<BarTender />} />
         <Route path="/bar/:barId" element={<PublicBar />} />
         <Route 
           path="/" 
