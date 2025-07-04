@@ -35,6 +35,8 @@ interface CartItem extends Item {
 
 const PublicBar = () => {
   const { barId } = useParams();
+  const [posList, setPosList] = useState<{id:string; name:string; slug:string;}[]>([]);
+  const [selectedPos, setSelectedPos] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -63,8 +65,29 @@ const PublicBar = () => {
     } catch (error) {
       console.error('Erreur lors du chargement des items:', error);
     }
-  };  
+  };
 
+  useEffect(() => {
+    if (!barId) return;
+    fetch(`https://kpsule.app/api/public/bars/${barId}/pos`)
+      .then(res => {
+        if (!res.ok) throw new Error(res.statusText);
+        return res.json();
+      })
+      .then(data => setPosList(data.points_of_sale))
+      .catch(err => console.error('Erreur chargement PDV public:', err));
+  }, [barId]);
+  
+  // ↓ Sélectionner automatiquement le pos_id en query ou fallback sur le 1er
+  useEffect(() => {
+    const qp = new URLSearchParams(window.location.search).get('pos_id');
+    if (qp && posList.find(p => p.id === qp)) {
+      setSelectedPos(qp);
+    } else if (posList.length) {
+      setSelectedPos(posList[0].id);
+    }
+  }, [posList]);  
+  
   const fetchPlaylist = async () => {
     try {
       const response = await fetch(`https://kpsule.app/api/public/bars/${barId}/playlist`);
@@ -360,7 +383,27 @@ const PublicBar = () => {
         </div>
 
       <main className="container mx-auto px-4 py-8">
-
+      {posList.length > 1 && (
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex justify-center flex-wrap gap-3 backdrop-blur-sm rounded-lg p-3">
+              {posList.map((pos) => (
+                <Button
+                  key={pos.id}
+                  variant={pos.id === selectedPos ? "default" : "outline"}
+                  size="sm"
+                  className={
+                    pos.id === selectedPos
+                      ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                      : "border-indigo-500 text-indigo-600 hover:bg-indigo-50"
+                  }
+                  onClick={() => setSelectedPos(pos.id)}
+                >
+                  {pos.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
         <Tabs defaultValue="menu" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 bg-white/60 backdrop-blur-sm">
             <TabsTrigger value="menu" className="flex items-center space-x-2">

@@ -13,8 +13,10 @@ import QRCode from "react-qr-code";
 const Dashboard = () => {
   const { logout, barId, userId } = useAuthStore();
   const [activeTab, setActiveTab] = useState("items");
-  const [posList, setPosList] = useState([]);
-  const [selectedPos, setSelectedPos] = useState(null);
+
+  const [posList, setPosList] = useState<{ id: string; name: string; slug: string }[]>([]);
+  const [selectedPos, setSelectedPos] = useState<string | null>(null);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [burgerOpen, setBurgerOpen] = useState(false);
   const [formName, setFormName] = useState("");
@@ -25,19 +27,35 @@ const Dashboard = () => {
     fetch(`https://kpsule.app/api/bars/${barId}/pos`, {
       headers: { 'x-user-id': userId }
     })
-      .then(res => {
-        if (!res.ok) throw new Error(res.statusText);
-        return res.json();
-      })
+      .then(res => res.json())
       .then(data => setPosList(data.points_of_sale))
       .catch(err => console.error('Erreur chargement PDV:', err));
   }, [modalOpen]);
+
 
   const openCreate = () => {
     setSelectedPos(null);
     setFormName("");
     setFormSlug("");
   };
+  useEffect(() => {
+    fetch(`https://kpsule.app/api/bars/${barId}/pos`, {
+      headers: { 'x-user-id': userId }
+    })
+      .then(res => res.json())
+      .then(data => {
+        console.log(data);
+        setPosList(data.points_of_sale);
+        // si aucun pos_id dans l'URL, pré-sélectionner le premier
+        const qp = new URLSearchParams(window.location.search).get('pos_id');
+        if (qp && data.points_of_sale.find((p: any) => p.id === qp)) {
+          setSelectedPos(qp);
+        } else if (data.points_of_sale.length) {
+          setSelectedPos(data.points_of_sale[0].id);
+        }
+      })
+      .catch(err => console.error('Erreur chargement PDV:', err));
+  }, [barId, userId]);
 
   const submitForm = async () => {
     const method = selectedPos ? 'PUT' : 'POST';
@@ -140,23 +158,83 @@ const Dashboard = () => {
       )}
 
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <Card className="bg-gradient-to-r from-orange-500 to-red-500 text-white border-0">
-            <CardHeader>
-              <CardTitle>Page publique de votre établissement</CardTitle>
-              <CardDescription className="text-orange-100">Partagez ce lien avec vos clients pour qu'ils puissent commander et voter pour la musique</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
-                <code className="bg-white/20 px-3 py-2 rounded text-sm flex-1 truncate">{`${window.location.origin}/bar/${barId}`}</code>
-                <Button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/bar/${barId}`)} variant="secondary" size="sm">Copier</Button>
-              </div>
-              <div className="mt-4 flex justify-center bg-white p-4 rounded">
-                <QRCode value={`${window.location.origin}/bar/${barId}`} size={128} />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="mb-8">
+        <Card className="bg-gradient-to-r from-orange-500 to-red-500 text-white border-0">
+          <CardHeader>
+            <CardTitle>Page publique de votre établissement</CardTitle>
+            <CardDescription className="text-orange-100">
+              Choisissez un point de vente et partagez son lien
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Sélection PDV */}
+            <div className="p-4 rounded-lg justify-center flex flex-wrap gap-3">
+              {posList.map(pos => (
+                <Button
+                  key={pos.id}
+                  variant={pos.id === selectedPos ? 'default' : 'outline'}
+                  size="sm"
+                  className={`
+                    text-xs 
+                    ${pos.id === selectedPos 
+                      ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
+                      : 'border-indigo-500 text-indigo-600 hover:bg-indigo-50'}
+                  `}
+                  onClick={() => setSelectedPos(pos.id)}
+                >
+                  {pos.name}
+                </Button>
+              ))}
+            </div>
+
+            {/* Lien & QR */}
+            <div className="flex flex-col items-center gap-4 text-center">
+              {(() => {
+                const link = selectedPos
+                  ? `${window.location.origin}/bar/${barId}?pos_id=${selectedPos}`
+                  : `${window.location.origin}/bar/${barId}`;
+                return (
+                  <>
+                    <code className="bg-white/20 px-4 py-2 rounded-lg text-sm max-w-full sm:max-w-[400px] truncate sm:whitespace-normal">
+                    {link}
+                    </code>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <Button
+                        className="bg-white/30 backdrop-blur border border-white/50 text-white hover:bg-white/40 transition text-xs"
+                        size="sm"
+                        onClick={() => navigator.clipboard.writeText(link)}
+                      >
+                        Copier le lien
+                      </Button>
+                      <Button
+                        className="bg-white/30 backdrop-blur border border-white/50 text-white hover:bg-white/40 transition text-xs"
+                        size="sm"
+                        onClick={() => {
+                          const canvas = document.querySelector('canvas');
+                          if (canvas) {
+                            const url = canvas.toDataURL('image/png');
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'qr_code.png';
+                            a.click();
+                          }
+                        }}
+                      >
+                        Enregistrer le QR code
+                      </Button>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow">
+                      <QRCode value={link} size={128} />
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-4 bg-white/60 backdrop-blur-sm">
