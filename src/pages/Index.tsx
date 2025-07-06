@@ -36,7 +36,7 @@ const Index = () => {
           path="/dashboard" 
           element={token ? <Dashboard /> : <Navigate to="/login" />} 
         />
-        <Route path="/bartender" element={<BarTender />} />
+        <Route path="/bartender/:pos_id" element={<BarTender />} />
         <Route path="/bar/:barId" element={<PublicBar />} />
         <Route 
           path="/" 

@@ -32,6 +32,18 @@ const Dashboard = () => {
       .catch(err => console.error('Erreur chargement PDV:', err));
   }, [modalOpen]);
 
+  useEffect(() => {
+    if (selectedPos) {
+      const selected = posList.find(p => p.id === selectedPos);
+      if (selected) {
+        setFormName(selected.name);
+        setFormSlug(selected.slug);
+      }
+    } else {
+      setFormName("");
+      setFormSlug("");
+    }
+  }, [selectedPos, posList]);
 
   const openCreate = () => {
     setSelectedPos(null);
@@ -121,41 +133,99 @@ const Dashboard = () => {
       </header>
 
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-3/4 max-w-2xl p-6 relative">
-            <button onClick={() => setModalOpen(false)} className="absolute top-2 right-2 text-xl">✕</button>
-            <h2 className="text-2xl font-bold mb-4">Points de vente</h2>
-            <div className="flex items-center mb-4">
-              <button onClick={() => setBurgerOpen(!burgerOpen)} className="mr-2 text-2xl">☰</button>
-              {burgerOpen && (
-                <ul className="border p-2 bg-white space-y-1">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 relative">
+            <button
+              onClick={() => setModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-xl"
+            >
+              ✕
+            </button>
+
+            <h2 className="text-3xl font-semibold text-center text-orange-600 mb-6">Gestion des Points de Vente</h2>
+
+            <div className="flex flex-col items-center gap-4">
+              {posList.length > 1 && (
+                <div className="flex flex-wrap justify-center gap-3">
                   {posList.map(pos => (
-                    <li key={pos.id} className="py-1 px-2 rounded hover:bg-gray-100 cursor-pointer" onClick={() => {
-                      setSelectedPos(pos); setFormName(pos.name); setFormSlug(pos.slug); setBurgerOpen(false);
-                    }}>
+                    <Button
+                      key={pos.id}
+                      onClick={() => setSelectedPos(pos.id)}
+                      className={`
+                        px-4 py-2 text-sm rounded-full border transition 
+                        ${selectedPos === pos.id
+                          ? 'bg-orange-600 text-white border-orange-600'
+                          : 'bg-white text-orange-600 border-orange-300 hover:bg-orange-100'}
+                      `}
+                      variant="outline"
+                    >
                       {pos.name}
-                    </li>
+                    </Button>
                   ))}
-                </ul>
+                </div>
               )}
-              <Button onClick={openCreate} size="sm">+ Nouveau</Button>
-            </div>
-            <div className="flex space-x-6">
-              <div>
-                {selectedPos ? <QRCode value={publicUrl(selectedPos)} size={128} /> : <p>Sélectionnez un PDV</p>}
-              </div>
-              <div className="flex-1 space-y-2">
-                <input type="text" placeholder="Nom" value={formName} onChange={e => setFormName(e.target.value)} className="w-full border p-2 rounded" />
-                <input type="text" placeholder="Slug" value={formSlug} onChange={e => setFormSlug(e.target.value)} className="w-full border p-2 rounded" />
-                <div className="flex space-x-2">
-                  <Button onClick={submitForm} disabled={!formName || !formSlug}>{selectedPos ? 'Modifier' : 'Créer'}</Button>
-                  {selectedPos && <Button variant="destructive" onClick={deletePos}>Supprimer</Button>}
+
+              <Button onClick={openCreate} size="sm" className="mt-2">+ Nouveau</Button>
+              {selectedPos && (
+                <a
+                href={`${window.location.origin}/bartender/${selectedPos}`}
+                target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 underline hover:text-blue-800 mt-2"
+                >
+                  {`${window.location.origin}/bartender/${selectedPos}`}
+                </a>
+              )}              
+                <div className="flex gap-6 w-full mt-6">
+                <div className="flex-shrink-0">
+                  {selectedPos ? (
+                    <QRCode value={`https://kpsule.app/bartender/${selectedPos}`} size={140} />
+                  ) : (
+                    <div className="w-[140px] h-[140px] flex items-center justify-center border rounded text-gray-400 text-sm">
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Nom"
+                    value={formName}
+                    onChange={e => setFormName(e.target.value)}
+                    className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Slug"
+                    value={formSlug}
+                    onChange={e => setFormSlug(e.target.value)}
+                    className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={submitForm}
+                      disabled={!formName || !formSlug}
+                      className="flex-1"
+                    >
+                      {selectedPos ? 'Modifier' : 'Créer'}
+                    </Button>
+                    {selectedPos && (
+                      <Button
+                        variant="destructive"
+                        onClick={deletePos}
+                        className="flex-1"
+                      >
+                        Supprimer
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       )}
+
 
       <main className="container mx-auto px-4 py-8">
       <div className="mb-8">

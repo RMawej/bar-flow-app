@@ -146,7 +146,7 @@ const MenuScanner = () => {
                     <p className="text-gray-600">{item.description}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xl font-bold text-orange-600">{item.price}€</p>
+                    <p className="text-xl font-bold text-orange-600">{item.price}$ CA</p>
                     <Button size="sm" className="mt-2">
                       Ajouter
                     </Button>

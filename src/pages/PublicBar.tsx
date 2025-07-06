@@ -197,7 +197,7 @@ const PublicBar = () => {
   
       toast({
         title: `${item.name} ajouté au panier`,
-        description: `Total : ${total.toFixed(2)}€`,
+        description: `Total : ${total.toFixed(2)}$ CA`,
       });
   
       return updatedCart;
@@ -239,6 +239,13 @@ const PublicBar = () => {
         item_id: item.id,
         quantity: item.quantity,
       }));
+      console.log("Commande envoyée :", {
+        client_name: clientName,
+        phone: phoneNumber,
+        pos_id: selectedPos,
+        items: orderItems,
+      });
+      
 
       const response = await fetch(`https://kpsule.app/api/public/bars/${barId}/commands`, {
         method: 'POST',
@@ -248,9 +255,10 @@ const PublicBar = () => {
         body: JSON.stringify({
           client_name: clientName,
           phone: phoneNumber,
+          pos_id: selectedPos,
           items: orderItems,
-        }),
-      });      
+        }),        
+      });
 
       if (response.ok) {
         toast({
@@ -281,6 +289,7 @@ const PublicBar = () => {
         
 
         setCart([]);
+        setShowCartModal(false);
         } else {
         throw new Error('Erreur lors de la commande');
       }
@@ -431,12 +440,12 @@ const PublicBar = () => {
                 <div key={item.item_id || item.id || index} className="flex justify-between">
 
                     <span>{item.item_name} × {item.quantity}</span>
-                    <span>{(item.price * item.quantity).toFixed(2)}€</span>
+                    <span>{(item.price * item.quantity).toFixed(2)}$ CA</span>
                   </div>
                 );
               })}
                 <div className="text-right font-bold text-orange-600">
-                  Total : {currentCommand.total.toFixed(2)}€
+                  Total : {currentCommand.total.toFixed(2)}$ CA
                 </div>
                 <Badge
                     className={
@@ -615,7 +624,7 @@ const PublicBar = () => {
                             <div key={item.id} className="flex items-center justify-between py-2 border-b border-gray-100">
                               <div>
                                 <p className="font-medium">{item.name}</p>
-                                <p className="text-sm text-gray-600">{item.price}€ × {item.quantity}</p>
+                                <p className="text-sm text-gray-600">{item.price}$ CA × {item.quantity}</p>
                               </div>
                               <div className="flex items-center space-x-2">
                                 <Button
@@ -642,7 +651,7 @@ const PublicBar = () => {
                           <div className="flex items-center justify-between mb-4">
                             <p className="text-lg font-bold">Total</p>
                             <p className="text-xl font-bold text-orange-600">
-                              {getTotalPrice().toFixed(2)}€
+                              {getTotalPrice().toFixed(2)}$ CA
                             </p>
                           </div>
 
@@ -803,7 +812,7 @@ const PublicBar = () => {
                           <div>
                             <p className="font-medium">{item.name}</p>
                             <p className="text-sm text-gray-600">
-                              {item.price}€ × {item.quantity}
+                              {item.price}$ CA × {item.quantity}
                             </p>
                           </div>
                         </div>
@@ -825,7 +834,7 @@ const PublicBar = () => {
                     <div className="flex items-center justify-between mb-4">
                       <p className="text-lg font-bold">Total</p>
                       <p className="text-xl font-bold text-orange-600">
-                        {getTotalPrice().toFixed(2)}€
+                        {getTotalPrice().toFixed(2)}$ CA
                       </p>
                     </div>
 
@@ -847,7 +856,7 @@ const PublicBar = () => {
     {!currentCommand && !showCartModal && (
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-t border-orange-200 shadow-md px-4 py-3 flex justify-between items-center">
         <div className="text-lg font-bold text-orange-600">
-          Total : {getTotalPrice().toFixed(2)}€
+          Total : {getTotalPrice().toFixed(2)}$ CA
         </div>
         <Button
           onClick={() => setShowCartModal(true)}
@@ -858,9 +867,6 @@ const PublicBar = () => {
         </Button>
       </div>
     )}
-
-
-
       </main>
     </div>
   );

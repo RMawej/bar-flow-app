@@ -19,22 +19,36 @@ interface Order {
   created_at: string;
   pickup_code?: string;
   pickup_color?: string;
+  pos_name: string;
 }
-const OrdersList = ({ filter }: { filter: "all" | "done" | "not_done" }) => {
+const OrdersList = ({
+  filter,
+  pos_id,
+  pos_token,
+}: {
+  filter: "all" | "done" | "not_done";
+  pos_id?: string;
+  pos_token?: string;
+}) => {
   const { token, barId, userId } = useAuthStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchOrders = async () => {
-    if (!token || !barId) return;
+    let url: string;
+    let headers: Record<string, string> = {};
+
+    if (pos_token && pos_id) {
+      url = `https://kpsule.app/api/pos/${pos_id}/commands`;
+      headers["token"] = pos_token;
+    } else {
+      url = `https://kpsule.app/api/bars/${barId}/commands`;
+      headers["x-user-id"] = userId;
+    }
 
     setIsLoading(true);
     try {
-      const response = await fetch(`https://kpsule.app/api/bars/${barId}/commands`, {
-        headers: {
-          'x-user-id': userId,
-        },
-      });
+      const response = await fetch(url, { headers });
 
       if (response.ok) {
         const data = await response.json();
@@ -58,7 +72,7 @@ const OrdersList = ({ filter }: { filter: "all" | "done" | "not_done" }) => {
 
   useEffect(() => {
     if (!barId) return;
-    const socket = new WebSocket(`wss://kpsule.app/ws/${barId}`);
+    const socket = new WebSocket(`wss://kpsule.app/ws/${barId}?token=${pos_token}&pos_id=${pos_id}`);
   
     socket.onmessage = (event) => {
       const newOrder = JSON.parse(event.data);
@@ -133,6 +147,12 @@ const OrdersList = ({ filter }: { filter: "all" | "done" | "not_done" }) => {
               <Card className="bg-white/80 backdrop-blur-sm border-orange-200 hover:shadow-lg transition-shadow">
                 <CardHeader>
                   <div className="flex items-center justify-between">
+                  {order.pos_name && (
+                    <Badge className="absolute top-3 right-3 bg-orange-100 text-orange-800 border border-orange-300">
+                      {order.pos_name}
+                    </Badge>
+                  )}
+
                     <CardTitle className="flex items-center space-x-2">
                       <User className="h-5 w-5 text-orange-600" />
                       <span>{order.client_name}</span>
@@ -145,16 +165,22 @@ const OrdersList = ({ filter }: { filter: "all" | "done" | "not_done" }) => {
                           ready: "done",
                           done: "pending",
                         }[order.status] || "pending";
-
+                        
                         try {
-                          const res = await fetch(`https://kpsule.app/api/bars/${barId}/commands/${order.id}/status`, {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                              "x-user-id": userId,
-                            },
-                            body: JSON.stringify({ status: next }),
-                          });
+                          const url = pos_token
+                          ? `https://kpsule.app/api/pos/${pos_id}/commands/${order.id}/status`
+                          : `https://kpsule.app/api/bars/${barId}/commands/${order.id}/status`;
+                        
+                        const headers: Record<string, string> = {
+                          "Content-Type": "application/json",
+                          ...(pos_token ? { token: pos_token } : { "x-user-id": userId }),
+                        };
+                        
+                        const res = await fetch(url, {
+                          method: "POST",
+                          headers,
+                          body: JSON.stringify({ status: next }),
+                        });
                           if (res.ok) {
                             setOrders((prev) =>
                               prev.map((o) =>
@@ -191,14 +217,14 @@ const OrdersList = ({ filter }: { filter: "all" | "done" | "not_done" }) => {
                           <p className="text-sm text-gray-600">Quantité: {item.quantity}</p>
                         </div>
                         <p className="font-semibold text-orange-600">
-                          {(item.price * item.quantity).toFixed(2)}€
+                          {(item.price * item.quantity).toFixed(2)}$ CA
                         </p>
                       </div>
                     ))}
                     <div className="pt-3 border-t border-orange-200">
                       <div className="flex items-center justify-between">
                         <p className="text-lg font-bold">Total</p>
-                        <p className="text-xl font-bold text-orange-600">{order.total.toFixed(2)}€</p>
+                        <p className="text-xl font-bold text-orange-600">{order.total.toFixed(2)}$ CA</p>
                       </div>
                     </div>
                     {order.pickup_code && order.status !== "ready" && (
@@ -217,14 +243,21 @@ const OrdersList = ({ filter }: { filter: "all" | "done" | "not_done" }) => {
                   }}
                   onClick={async () => {
                     try {
-                      const res = await fetch(`https://kpsule.app/api/bars/${barId}/commands/${order.id}/status`, {
+                      const url = pos_token
+                        ? `https://kpsule.app/api/pos/${pos_id}/commands/${order.id}/status`
+                        : `https://kpsule.app/api/bars/${barId}/commands/${order.id}/status`;
+                      
+                      const headers: Record<string, string> = {
+                        "Content-Type": "application/json",
+                        ...(pos_token ? { token: pos_token } : { "x-user-id": userId }),
+                      };
+                      
+                      const res = await fetch(url, {
                         method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                          "x-user-id": userId,
-                        },
+                        headers,
                         body: JSON.stringify({ status: "done" }),
                       });
+                    
 
                       if (res.ok) {
                         setOrders((prev) =>

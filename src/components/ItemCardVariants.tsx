@@ -28,7 +28,7 @@ const CardDesign1 = ({ item, onAdd }: Props) => (
   <CardWrapper>
     {item.image_url && <img src={item.image_url} alt={item.name} className="w-full h-32 object-cover rounded-md mb-3 transition-transform hover:scale-105" />}
     <h3 className="font-semibold text-lg text-gray-800 text-center">{item.name}</h3>
-    <p className="text-2xl font-bold text-orange-600 text-center mb-2">{item.price}€</p>
+    <p className="text-2xl font-bold text-orange-600 text-center mb-2">{item.price}$ CA</p>
     {item.description && <p className="text-gray-600 text-sm text-center mb-3">{item.description}</p>}
     <Button onClick={onAdd} className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600">
       <Plus className="h-4 w-4 mr-2" /> Ajouter au panier
@@ -41,7 +41,7 @@ const CardDesign2 = ({ item, onAdd }: Props) => (
     <CardContent className="p-4 flex flex-col items-center">
       {item.image_url && <img src={item.image_url} alt={item.name} className="w-24 h-24 object-cover rounded-full mb-2" />}
       <h3 className="font-bold text-lg text-orange-800">{item.name}</h3>
-      <p className="text-xl font-bold text-orange-600">{item.price}€</p>
+      <p className="text-xl font-bold text-orange-600">{item.price}$ CA</p>
       <Button onClick={onAdd} className="mt-4 rounded-full px-4 bg-orange-500 text-white">+
       </Button>
     </CardContent>
@@ -89,7 +89,7 @@ export const CardDesign3 = ({
         <div className="absolute inset-0 bg-gradient-to-b from-black/50 to-black/80 flex flex-col justify-between text-white text-center pointer-events-none p-4">
         <div className="flex justify-between text-2xl font-bold">
             <span>{item.name}</span>
-            <span>{item.price}€</span>
+            <span>{item.price}$ CA</span>
         </div>
 
         {quantity > 0 && (
@@ -119,7 +119,7 @@ const CardDesign4 = ({ item, onAdd }: Props) => (
     {item.image_url && <img src={item.image_url} alt={item.name} className="w-20 h-20 object-cover rounded-md" />}
     <div className="flex-1">
       <h3 className="font-semibold text-lg text-gray-800">{item.name}</h3>
-      <p className="text-orange-600 font-bold">{item.price}€</p>
+      <p className="text-orange-600 font-bold">{item.price}$ CA</p>
       {item.description && <p className="text-sm text-gray-600">{item.description}</p>}
     </div>
     <Button size="sm" onClick={onAdd}><Plus className="h-4 w-4" /></Button>
@@ -130,7 +130,7 @@ const CardDesign5 = ({ item, onAdd }: Props) => (
   <Card className="flex flex-col items-center bg-white/70 rounded-xl p-4">
     {item.image_url && <img src={item.image_url} alt={item.name} className="w-20 h-20 object-cover border border-orange-200 rounded-full mb-2" />}
     <h3 className="text-md font-medium mb-1 text-center">{item.name}</h3>
-    <p className="text-sm text-gray-600 mb-2">{item.price}€</p>
+    <p className="text-sm text-gray-600 mb-2">{item.price}$ CA</p>
     <Button variant="ghost" size="icon" onClick={onAdd} className="hover:scale-110 transition-transform">
       <Plus className="h-5 w-5 text-orange-600" />
     </Button>

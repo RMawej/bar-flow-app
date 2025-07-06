@@ -244,7 +244,7 @@ const ItemsManager = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="price">Prix (€) *</Label>
+                  <Label htmlFor="price">Prix ($ CA) *</Label>
                   <Input
                     id="price"
                     type="number"
@@ -347,7 +347,7 @@ const ItemsManager = () => {
               {/* Infos nom + prix visibles en permanence */}
               <div className="z-10 text-center absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-500 opacity-100 group-hover:opacity-0">
                 <h3 className="text-3xl font-semibold drop-shadow">{item.name}</h3>
-                <p className="text-2xl mt-1 drop-shadow">{item.price}€</p>
+                <p className="text-2xl mt-1 drop-shadow">{item.price}$ CA</p>
               </div>
 
 
