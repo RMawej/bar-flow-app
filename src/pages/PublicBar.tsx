@@ -137,7 +137,7 @@ const PublicBar = () => {
     if (!barId || !currentCommand) return;
   
     const clientId = localStorage.getItem("client_id");
-    const socket = new WebSocket(`wss://kpsule.app/ws/${barId}?client_id=${clientId}`);
+    const socket = new WebSocket(`wss://kpsule.app/ws?client_id=${clientId}`);
   
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -232,77 +232,47 @@ const PublicBar = () => {
       });
       return;
     }
-
+  
     setIsLoading(true);
     try {
       const orderItems = cart.map(item => ({
         item_id: item.id,
         quantity: item.quantity,
       }));
-      console.log("Commande envoyée :", {
-        client_name: clientName,
-        phone: phoneNumber,
-        pos_id: selectedPos,
-        items: orderItems,
-      });
-      
-
-      const response = await fetch(`https://kpsule.app/api/public/bars/${barId}/commands`, {
+  
+      const response = await fetch(`https://kpsule.app/api/bars/${barId}/checkout`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           client_name: clientName,
           phone: phoneNumber,
           pos_id: selectedPos,
           items: orderItems,
-        }),        
+          total: getTotalPrice()
+        })
       });
-
-      if (response.ok) {
-        toast({
-          title: "Commande envoyée",
-          description: "Votre commande a été transmise au bar !",
-        });
-        const clientId = crypto.subtle
-          ? await crypto.subtle.digest("SHA-256", new TextEncoder().encode(phoneNumber)).then(buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''))
-          : "";
-
-        localStorage.setItem("client_id", clientId);
-        localStorage.setItem("client_name", clientName);
-        localStorage.setItem("phone_number", phoneNumber);
-
-
-        const data = await response.json();
-        setCurrentCommand({
-          id: data.command_id,
-          items: cart.map(item => ({
-            item_id: item.id,
-            item_name: item.name,
-            quantity: item.quantity,
-            price: item.price,
-          })),
-          status: "pending",
-          total: getTotalPrice(),
-        });
-        
-
-        setCart([]);
-        setShowCartModal(false);
-        } else {
-        throw new Error('Erreur lors de la commande');
-      }
+  
+      if (!response.ok) throw new Error("Erreur création session Stripe");
+  
+      const data = await response.json();
+  
+      // Sauvegarde infos pour affichage post-paiement
+      localStorage.setItem("client_name", clientName);
+      localStorage.setItem("phone_number", phoneNumber);
+  
+      // Redirige vers Stripe Checkout
+      window.location.href = data.checkout_url;
     } catch (error) {
       toast({
         title: "Erreur",
-        description: "Impossible d'envoyer la commande",
+        description: "Impossible d'initier le paiement",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
   };
+  
 
   const handleVote = async (trackId: number) => {
     try {

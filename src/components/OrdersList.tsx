@@ -71,17 +71,30 @@ const OrdersList = ({
   }, [token, barId]);
 
   useEffect(() => {
-    if (!barId) return;
-    const socket = new WebSocket(`wss://kpsule.app/ws/${barId}?token=${pos_token}&pos_id=${pos_id}`);
-  
+    if (!pos_id || !pos_token) return;
+    const socket = new WebSocket(`wss://kpsule.app/ws?pos_id=${pos_id}&token=${pos_token}`);
+    socket.onopen = () => console.log("✅ WebSocket connecté dans OrdersList");
+
     socket.onmessage = (event) => {
-      const newOrder = JSON.parse(event.data);
-      if (!newOrder.id || !Array.isArray(newOrder.items)) return;
-      setOrders((prev) => [newOrder, ...prev]);      
+      const message = JSON.parse(event.data);
+      if (message.type === "new_order") {
+        const newOrder = message.order;
+        console.log("🆕 Nouvelle commande reçue :", newOrder); // 👈 log ici
+        setOrders((prev) => [newOrder, ...prev]);
+      }
+      if (message.type === "command_update") {
+        const updated = message.command;
+        setOrders((prev) =>
+          prev.map((order) =>
+            order.id === updated.id ? { ...order, status: updated.status } : order
+          )
+        );
+      }
     };
   
     return () => socket.close();
-  }, [barId]);
+  }, [pos_id, pos_token]);
+  
 
   const filteredOrders = orders.filter((order) => {
     if (filter === "done") return order.status === "done";

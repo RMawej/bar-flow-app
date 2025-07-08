@@ -23,6 +23,40 @@ const BarTender = () => {
       .catch(err => console.error("Erreur récupération nom PdV", err));
   }, [pos_id]);
 
+  useEffect(() => {
+    if (!isAuthorized || !posToken || !pos_id) return;
+  
+    const ws = new WebSocket(
+      `wss://kpsule.app/ws?pos_id=${pos_id}&token=${posToken}`
+    );    
+  
+    ws.onopen = () => {
+      console.log("✅ WebSocket connecté (barman)");
+    };
+  
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log("📦 Message WebSocket reçu :", data);
+  
+      // Optionnel : notifier ou recharger les commandes si besoin
+      toast({
+        title: "Nouvelle commande !",
+        description: "Une commande vient d'être passée 🍸",
+      });
+    };
+  
+    ws.onerror = (err) => {
+      console.error("❌ WebSocket erreur :", err);
+    };
+  
+    ws.onclose = () => {
+      console.warn("🔌 WebSocket fermé");
+    };
+  
+    return () => ws.close();
+  }, [isAuthorized, posToken, pos_id]);
+  
+
   const handleDigitInput = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const value = e.target.value.replace(/[^0-9]/g, "");
     if (!value) return;

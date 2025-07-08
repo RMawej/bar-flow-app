@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStore } from "@/store/authStore";
 import { Music, LogOut, Package, ShoppingCart, Upload } from "lucide-react";
 import ItemsManager from "@/components/ItemsManager";
-import OrdersList from "@/components/OrdersList";
+import OrdersListAdmin from "@/components/OrdersListAdmin";
 import PlaylistManager from "@/components/PlaylistManager";
 import MenuScanner from "@/components/MenuScanner";
 import QRCode from "react-qr-code";
@@ -315,7 +315,7 @@ const Dashboard = () => {
           </TabsList>
           <TabsContent value="items"><ItemsManager /></TabsContent>
           <TabsContent value="scanner"><MenuScanner /></TabsContent>
-          <TabsContent value="orders"><OrdersList filter="all" /></TabsContent>
+          <TabsContent value="orders"><OrdersListAdmin /></TabsContent>
           <TabsContent value="playlist"><PlaylistManager /></TabsContent>
         </Tabs>
       </main>
