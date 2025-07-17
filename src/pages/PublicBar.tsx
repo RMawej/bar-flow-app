@@ -239,6 +239,15 @@ const PublicBar = () => {
         item_id: item.id,
         quantity: item.quantity,
       }));
+      const clientId = crypto.subtle
+        ? await crypto.subtle.digest("SHA-256", new TextEncoder().encode(phoneNumber))
+            .then(hashBuffer => Array.from(new Uint8Array(hashBuffer))
+              .map(b => b.toString(16).padStart(2, "0"))
+              .join(""))
+        : undefined;
+
+      if (clientId) localStorage.setItem("client_id", clientId);
+
   
       const response = await fetch(`https://kpsule.app/api/bars/${barId}/checkout`, {
         method: 'POST',
@@ -248,8 +257,9 @@ const PublicBar = () => {
           phone: phoneNumber,
           pos_id: selectedPos,
           items: orderItems,
-          total: getTotalPrice()
-        })
+          total: getTotalPrice(),
+          client_id: localStorage.getItem("client_id") || undefined
+        })        
       });
   
       if (!response.ok) throw new Error("Erreur création session Stripe");
