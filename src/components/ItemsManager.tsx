@@ -284,6 +284,13 @@ const ItemsManager = () => {
                     }
                   }}
                 />
+                {!previewUrl && formData.image && (
+                  <img
+                    src={formData.image}
+                    alt="Image actuelle"
+                    className="rounded-md mt-2 max-h-48 object-contain"
+                  />
+                )}
                 {previewUrl && (
                   <img
                     src={previewUrl}
