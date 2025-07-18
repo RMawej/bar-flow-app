@@ -17,6 +17,84 @@ interface Track {
   votes: number;
   suggested_by?: string;
 }
+const debugSpotifyConnection = async () => {
+  const token = localStorage.getItem("spotify_user_token");
+  if (!token) return console.warn("❌ Aucun token utilisateur Spotify");
+
+  try {
+    // Infos utilisateur
+    const meRes = await fetch("https://api.spotify.com/v1/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const user = await meRes.json();
+    console.log("👤 Utilisateur Spotify :", user);
+
+    // Devices connectés
+    const devicesRes = await fetch("https://api.spotify.com/v1/me/player/devices", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const devicesData = await devicesRes.json();
+    console.log("🎧 Devices connectés :", devicesData.devices);
+
+    if (devicesData.devices.length === 0) {
+      console.warn("⚠️ Aucun device Spotify actif détecté");
+    } else {
+      console.info("✅ Device(s) Spotify actifs détectés");
+    }
+  } catch (err) {
+    console.error("❌ Erreur lors de la vérification Spotify :", err);
+  }
+};
+
+const loginWithSpotify = () => {
+  const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+  const redirectUri = "https://kpsule.app/callback";
+  const scopes = [
+    "streaming",
+    "user-read-email",
+    "user-read-private",
+    "user-modify-playback-state",
+    "user-read-playback-state",
+  ];
+
+  const url = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(
+    redirectUri
+  )}&scope=${scopes.join("%20")}&show_dialog=true`;
+
+  window.location.href = url;
+};
+
+const playOnActiveDevice = async (spotifyUrl: string) => {
+  const token = localStorage.getItem("spotify_user_token");
+  if (!token) return toast({ title: "Erreur", description: "Non connecté à Spotify" });
+
+  const uri = "spotify:track:" + new URL(spotifyUrl).pathname.split("/").pop();
+
+  // Récupère les devices actifs
+  const res = await fetch("https://api.spotify.com/v1/me/player/devices", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  const activeDevice = data.devices.find((d: any) => d.is_active);
+
+  if (!activeDevice) {
+    toast({ title: "Aucun device actif", description: "Lance Spotify sur un appareil" });
+    return;
+  }
+
+  // Joue la musique
+  await fetch("https://api.spotify.com/v1/me/player/play?device_id=" + activeDevice.id, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ uris: [uri] }),
+  });
+
+  toast({ title: "🎶 Lecture en cours", description: `Sur ${activeDevice.name}` });
+};
+
 
 const getSpotifyToken = async () => {
   const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
@@ -126,6 +204,39 @@ const PlaylistManager = () => {
     track_name: "",
     spotify_url: "",
   });
+  useEffect(() => {
+    const token = localStorage.getItem("spotify_user_token");
+    if (!token) return;
+
+    const script = document.createElement("script");
+    script.src = "https://sdk.scdn.co/spotify-player.js";
+    script.async = true;
+    document.body.appendChild(script);
+
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      const player = new Spotify.Player({
+        name: "Fiddles Web Player",
+        getOAuthToken: cb => cb(token),
+        volume: 0.5,
+      });
+
+      player.addListener("ready", ({ device_id }) => {
+        console.log("Device ID Spotify:", device_id);
+
+        // Transférer la lecture vers ce device
+        fetch("https://api.spotify.com/v1/me/player", {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ device_ids: [device_id], play: false }),
+        });
+      });
+
+      player.connect();
+    };
+  }, []);
 
   const fetchPlaylist = async () => {
     if (!token || !barId) return;
@@ -236,6 +347,10 @@ const PlaylistManager = () => {
         >
           <Plus className="h-4 w-4 mr-2" />
           Ajouter une musique
+        </Button>
+        <Button onClick={loginWithSpotify}>Se connecter à Spotify</Button>
+        <Button onClick={debugSpotifyConnection} variant="outline">
+          Debug Spotify
         </Button>
       </div>
 
@@ -391,6 +506,14 @@ const PlaylistManager = () => {
                       <ExternalLink className="h-4 w-4 text-green-600" />
                     </Button>
                   )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => playOnActiveDevice(track.spotify_url!)}
+                  >
+                    <Music className="h-4 w-4 text-blue-500" />
+                  </Button>
+
                 </div>
               </CardContent>
             </Card>

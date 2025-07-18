@@ -285,21 +285,28 @@ const PublicBar = () => {
   
 
   const handleVote = async (trackId: number) => {
+    if (!phoneNumber) {
+      toast({
+        title: "Téléphone requis",
+        description: "Veuillez saisir votre numéro de téléphone pour voter",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      const response = await fetch(`https://kpsule.app/api/bars/${barId}/playlist/vote`, {
+      const response = await fetch(`https://kpsule.app/api/public/bars/${barId}/playlist/${trackId}/vote`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ track_id: trackId }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneNumber }),
       });
 
       if (response.ok) {
-        toast({
-          title: "Vote enregistré",
-          description: "Merci pour votre vote !",
-        });
+        toast({ title: "Vote enregistré", description: "Merci pour votre vote !" });
         fetchPlaylist(); // Refresh to show updated votes
+      } else {
+        const err = await response.json();
+        toast({ title: "Erreur", description: err.detail || "Vote impossible", variant: "destructive" });
       }
     } catch (error) {
       toast({
@@ -309,6 +316,7 @@ const PublicBar = () => {
       });
     }
   };
+
 
   const handleSuggestTrack = async () => {
     if (!newTrackName) {

@@ -5,7 +5,8 @@ import Login from "./Login";
 import Dashboard from "./Dashboard";
 import PublicBar from "./PublicBar";
 import { useAuthStore } from "@/store/authStore";
-
+import PublicMap from "./PublicMap";
+import Callback from "./callback"; 
 import BarTender from "./BarTender";
 
 const Index = () => {
@@ -28,6 +29,7 @@ const Index = () => {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/callback" element={<Callback />} />
         <Route 
           path="/login" 
           element={token ? <Navigate to="/dashboard" /> : <Login />} 
@@ -42,6 +44,8 @@ const Index = () => {
           path="/" 
           element={token ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} 
         />
+        <Route path="/map" element={<PublicMap />} />
+
       </Routes>
     </BrowserRouter>
   );
