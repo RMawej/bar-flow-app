@@ -54,6 +54,9 @@ const PublicBar = () => {
   const orderSectionRef = useRef<HTMLDivElement | null>(null);
   const [showCartModal, setShowCartModal] = useState(false);
 
+
+
+    
   const fetchItems = async () => {
     try {
       const response = await fetch(`https://kpsule.app/api/bars/${barId}/items`);
