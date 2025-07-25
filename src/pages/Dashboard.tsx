@@ -239,13 +239,14 @@ const Dashboard = () => {
         className="mb-8 transition-all duration-300"
       >
         <Card className="bg-gradient-to-r from-orange-500 to-red-500 text-white border-0 overflow-hidden">
-          <CardHeader        onMouseEnter={() => setShowPublicPage(true)}
-        onMouseLeave={() => !lockPublicPage && setShowPublicPage(false)}
-        onClick={() => setLockPublicPage(prev => {
-          const newLock = !prev;
-          if (!newLock) setShowPublicPage(false); // ferme aussi visuellement
-          return newLock;
-        })}>
+          <CardHeader
+            onClick={() => setLockPublicPage(prev => {
+              const newLock = !prev;
+              if (!newLock) setShowPublicPage(false); // ferme aussi visuellement
+              else setShowPublicPage(true); // ouvre si lock activé
+              return newLock;
+            })}>
+
             <CardTitle className="cursor-pointer">Page publique de votre établissement</CardTitle>
             <CardDescription className="text-orange-100">
               Choisissez un point de vente et partagez son lien

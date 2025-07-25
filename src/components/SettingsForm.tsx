@@ -8,6 +8,8 @@ import "leaflet/dist/leaflet.css";
 const tick = "✅";
 const spinner = "⏳";
 
+
+
 const defaultPos: [number, number] = [45.5088, -73.561]; // Montréal fallback
 
 export default function SettingsForm() {
@@ -23,6 +25,10 @@ export default function SettingsForm() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [headerMessage, setHeaderMessage] = useState("");
+  const [headerFile, setHeaderFile] = useState<File | null>(null);
+  const [headerImageUrl, setHeaderImageUrl] = useState<string|null>(null);
+
 
   useEffect(() => {
     fetch(`https://kpsule.app/api/bars/${barId}/location`)
@@ -34,6 +40,17 @@ export default function SettingsForm() {
         }
       });
   }, [barId]);
+
+  useEffect(() => {
+    fetch(`https://kpsule.app/api/public/bars/${barId}/header`)
+      .then(r=>r.json())
+      .then(data => {
+        setHeaderMessage(data.message);
+        setHeaderImageUrl(data.image_url);
+      });
+  }, [barId]);
+
+
 
   const geocodeAddress = async () => {
     if (!form.address) return;
@@ -64,6 +81,20 @@ export default function SettingsForm() {
       },
       body: JSON.stringify(form)
     });
+
+
+    // 🔁 Envoie image + message du header
+    if (headerMessage || headerFile) {
+      const headerForm = new FormData();
+      headerForm.append("message", headerMessage);
+      headerForm.append("user_id", userId);
+      if (headerFile) headerForm.append("file", headerFile);
+
+      await fetch(`https://kpsule.app/api/bars/${barId}/header`, {
+        method: "POST",
+        body: headerForm,
+      });
+    }
 
     if (res.ok) alert("✅ Enregistré");
     else alert("❌ Erreur");
@@ -145,6 +176,25 @@ export default function SettingsForm() {
         onChange={e => setForm({ ...form, url: e.target.value })}
         className="w-full border rounded px-3 py-2"
       />
+
+      <input
+        type="text"
+        placeholder="Message du header"
+        value={headerMessage}
+        onChange={(e) => setHeaderMessage(e.target.value)}
+        className="w-full border rounded px-3 py-2"
+      />
+      <input
+        type="file"
+        accept="image/*"
+        onChange={(e) => setHeaderFile(e.target.files?.[0] || null)}
+        className="w-full border rounded px-3 py-2"
+      />
+      {headerImageUrl && (
+      <img src={headerImageUrl + `?v=${Date.now()}`} alt="Aperçu header" className="w-full h-48 object-cover"/>
+    )}
+
+
       <Button onClick={save}>Sauvegarder</Button>
     </div>
   );

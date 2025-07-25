@@ -35,6 +35,9 @@ interface CartItem extends Item {
 
 const PublicBar = () => {
   const { barId } = useParams();
+  const [headerMessage, setHeaderMessage] = useState<string | null>(null);
+  const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null);
+
   const [posList, setPosList] = useState<{id:string; name:string; slug:string;}[]>([]);
   const [selectedPos, setSelectedPos] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
@@ -84,6 +87,19 @@ const PublicBar = () => {
       .then(data => setPosList(data.points_of_sale))
       .catch(err => console.error('Erreur chargement PDV public:', err));
   }, [barId]);
+
+  useEffect(() => {
+  if (!barId) return;
+
+    fetch(`https://kpsule.app/api/public/bars/${barId}/header`)
+      .then(res => res.json())
+      .then(data => {
+        setHeaderMessage(data.message);
+        setHeaderImageUrl(data.image_url);
+      })
+      .catch(err => console.error("Erreur chargement header :", err));
+  }, [barId]);
+
   
   // ↓ Sélectionner automatiquement le pos_id en query ou fallback sur le 1er
   useEffect(() => {
@@ -101,48 +117,58 @@ const PublicBar = () => {
   
   const fetchPlaylist = async () => {
     try {
-      const response = await fetch(`https://kpsule.app/api/public/bars/${barId}/playlist`);
+      const url = new URL(`https://kpsule.app/api/public/bars/${barId}/playlist`);
+      if (phoneNumber) url.searchParams.append("phone", phoneNumber);
+
+      const response = await fetch(url.toString());
       if (response.ok) {
         const data = await response.json();
-        setTracks(data);
+        setTracks([...data]);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement de la playlist:', error);
+      console.error("Erreur lors du chargement de la playlist:", error);
     }
   };
 
+
+
   useEffect(() => {
-    if (barId) {
-      // 🔁 Charger nom & téléphone sauvegardés
-      const savedName = localStorage.getItem("client_name");
-      const savedPhone = localStorage.getItem("phone_number");
-      if (savedName) setClientName(savedName);
-      if (savedPhone) setPhoneNumber(savedPhone);
-  
-      fetchItems();
-      fetchPlaylist();
-  
-      const savedId = localStorage.getItem("client_id");
+    if (!barId) return;
+
+    const savedName = localStorage.getItem("client_name");
+    const savedPhone = localStorage.getItem("phone_number");
+    const savedId = localStorage.getItem("client_id");
+    const lastCmd = localStorage.getItem("last_command");
+
+    if (savedName) setClientName(savedName);
+    if (savedPhone) setPhoneNumber(savedPhone);
+
+    if (savedId) {
       console.log("Saved Client ID:", savedId);
-      if (savedId) {
-        fetch(`https://kpsule.app/api/public/bars/${barId}/commands/by-client?client_id=${savedId}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data?.id) setCurrentCommand(data);
-          });
-      }
-      if (!savedId) {
-        const lastCmd = localStorage.getItem("last_command");
-        if (lastCmd) {
-          try {
-            setLastCommand(JSON.parse(lastCmd));
-          } catch {}
-        }
-      }
-      
+      fetch(`https://kpsule.app/api/public/bars/${barId}/commands/by-client?client_id=${savedId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data?.id) setCurrentCommand(data);
+          if (data?.status === "done") {
+            localStorage.removeItem("client_id");
+            setLastCommand(data);
+            setCurrentCommand(null);
+          }
+        });
+    } else if (lastCmd) {
+      try {
+        setLastCommand(JSON.parse(lastCmd));
+      } catch {}
     }
   }, [barId]);
-  
+
+  useEffect(() => {
+    if (barId && phoneNumber) {
+      fetchPlaylist();
+    }
+  }, [barId, phoneNumber]);
+
+
 
   useEffect(() => {
     if (!barId || !currentCommand) return;
@@ -371,14 +397,19 @@ const PublicBar = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
-      <header className="relative bg-white/80 backdrop-blur-sm border-b border-orange-200 shadow-sm sticky top-0 z-40">
-          <div className="container mx-auto px-4 py-6 text-center">
-          <div className="h-12 w-12 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Music className="h-6 w-6 text-white" />
-          </div>
-          <p className="text-gray-600 mt-1">Commandez et votez pour la musique !</p>
+      <header className="relative h-48 overflow-hidden">
+        {headerImageUrl ? (
+          <img src={headerImageUrl} alt="Header" className="w-full h-full object-cover" />
+        ) : (
+          <div className="bg-white/80 w-full h-full" />
+        )}
+        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+          <h1 className="text-white text-xl font-bold text-center px-4">
+            {headerMessage || "Commandez et votez pour la musique !"}
+          </h1>
         </div>
-        </header>
+      </header>
+
         <div className="fixed top-4 right-4 z-50 cursor-pointer" onClick={() => setShowCartModal(true)}>
           <div className="relative">
             <ShoppingCart className="h-10 w-10 text-orange-600" />
@@ -672,7 +703,40 @@ const PublicBar = () => {
           </TabsContent>
 
           <TabsContent value="music" className="space-y-6">
-            <Card className="bg-white/80 backdrop-blur-sm border-orange-200">
+
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Playlist Actuelle</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {tracks.sort((a, b) => b.votes - a.votes).map((track) => (
+                <div
+                  key={track.id}
+                  className="relative rounded-lg overflow-hidden shadow-md group hover:scale-[1.02] transition-transform cursor-pointer"
+                  style={{
+                    backgroundImage: `url(${track.image_url || "https://via.placeholder.com/300"})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    aspectRatio: "1 / 1",
+                  }}
+                >
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 flex justify-between items-center">
+                    <div className="text-white">
+                      <p className="font-semibold text-sm leading-tight">{track.track_name}</p>
+                      <p className="text-xs text-gray-300">{track.artist_name}</p>
+                    </div>
+                    <button onClick={() => handleVote(track.id)}>
+                      <ThumbsUp
+                        className={`h-5 w-5 transition ${
+                          track.already_voted ? "text-red-500" : "text-white/80"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+                        <Card className="bg-white/80 backdrop-blur-sm border-orange-200">
               <CardHeader>
                 <CardTitle>Suggérer une musique</CardTitle>
                 <CardDescription>Proposez une musique pour la playlist du bar</CardDescription>
@@ -707,36 +771,6 @@ const PublicBar = () => {
                 </Button>
               </CardContent>
             </Card>
-
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Playlist Actuelle</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {tracks
-                  .sort((a, b) => b.votes - a.votes)
-                  .map((track) => (
-                    <Card key={track.id} className="bg-white/80 backdrop-blur-sm border-orange-200 hover:shadow-lg transition-shadow">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <h3 className="font-semibold text-gray-800 leading-tight flex-1">
-                            {track.track_name}
-                          </h3>
-                          <Badge variant="outline" className="ml-2 border-orange-300 text-orange-700">
-                            {track.votes} votes
-                          </Badge>
-                        </div>
-                        <Button
-                          onClick={() => handleVote(track.id)}
-                          className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
-                          size="sm"
-                        >
-                          <ThumbsUp className="h-4 w-4 mr-2" />
-                          Voter
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
-              </div>
-            </div>
           </TabsContent>
         </Tabs>
         {showCodeModal && (
