@@ -47,7 +47,10 @@ const PublicBar = () => {
   const [newTrackName, setNewTrackName] = useState("");
   const [newSpotifyUrl, setNewSpotifyUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [phonePrefix, setPhonePrefix] = useState("+1");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [showPhoneModal, setShowPhoneModal] = useState(true); // ou false selon le cas
   const [pickupCode, setPickupCode] = useState<string | null>(null);
   const [pickupColor, setPickupColor] = useState<string | null>(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
@@ -409,6 +412,52 @@ const PublicBar = () => {
           </h1>
         </div>
       </header>
+      {showPhoneModal && (
+        <div className="fixed inset-0 z-50 bg-white/95 flex flex-col items-center justify-center p-6 text-center space-y-6">
+          <h2 className="text-xl font-bold text-gray-800">Veuillez entrer votre numéro de téléphone</h2>
+          <div className="flex items-center gap-2">
+            <button
+              className={`px-3 py-2 rounded-md border ${phonePrefix === "+1" ? "bg-orange-500 text-white" : "bg-white text-gray-800"}`}
+              onClick={() => setPhonePrefix("+1")}
+            >
+              +1
+            </button>
+
+            <input
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value.replace(/\s/g, ""))}
+              placeholder="Numéro (ex: 5144004139)"
+              className="border rounded-md px-4 py-2 w-64"
+            />
+          </div>
+          <p className="text-sm text-gray-500">
+            Format attendu : {phonePrefix === "+1" ? "+1XXXXXXXXXX" : "+33XXXXXXXXX"}
+          </p>
+          <p className="text-xs text-gray-500">
+            En validant, vous acceptez que ce numéro de telephone soit utilise pour le suivi de votre commande et de vos votes musicaux.
+          </p>
+          {phoneError && <p className="text-red-500 text-sm">{phoneError}</p>}
+          <button
+            className="bg-orange-500 text-white px-6 py-2 rounded-md"
+            onClick={() => {
+              const fullNumber = phonePrefix + phoneNumber;
+              const isValid = /^(\+1\d{10}|\+33\d{9})$/.test(fullNumber);
+              if (!isValid) {
+                setPhoneError("Numéro invalide. Veuillez vérifier le format.");
+                return;
+              }
+              setPhoneError("");
+              localStorage.setItem("phone_number", fullNumber);
+              setShowPhoneModal(false);
+            }}
+          >
+            Valider
+          </button>
+        </div>
+      )}
+
+
 
         <div className="fixed top-4 right-4 z-50 cursor-pointer" onClick={() => setShowCartModal(true)}>
           <div className="relative">

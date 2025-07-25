@@ -13,6 +13,8 @@ import SettingsForm from "@/components/SettingsForm";
 
 const Dashboard = () => {
   const { logout, barId, userId } = useAuthStore();
+
+  const [barName, setBarName] = useState("");
   const [activeTab, setActiveTab] = useState(() => {
     return new URLSearchParams(window.location.search).get("tab") || "items";
   });
@@ -36,6 +38,16 @@ const Dashboard = () => {
       .then(data => setPosList(data.points_of_sale))
       .catch(err => console.error('Erreur chargement PDV:', err));
   }, [modalOpen]);
+
+  useEffect(() => {
+    fetch(`https://kpsule.app/api/bars/${barId}`, {
+      headers: { 'x-user-id': userId }
+    })
+      .then(res => res.json())
+      .then(data => setBarName(data.name))
+      .catch(() => setBarName("Mon établissement"));
+  }, [barId, userId]);
+
 
   useEffect(() => {
     if (selectedPos) {
@@ -122,7 +134,7 @@ const Dashboard = () => {
               <Music className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">Votre Dashboard</h1>
+              <h1 className="text-xl font-bold text-gray-800">{barName}</h1>
               <p className="text-sm text-gray-600">Gestion de votre établissement</p>
             </div>
           </div>

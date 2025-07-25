@@ -194,6 +194,7 @@ const deleteAllTracks = async (barId: string, userId: string) => {
 
 const PlaylistManager = () => {
   const { token, userId, barId } = useAuthStore();
+  const [isLoadingSearch, setIsLoadingSearch] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -269,12 +270,14 @@ const PlaylistManager = () => {
   useEffect(() => {
     const delay = setTimeout(() => {
       if (formData.track_name.length > 2) {
+        setIsLoadingSearch(true);
         Promise.all([
           searchSpotifyTracks(formData.track_name),
           searchSpotifyPlaylists(formData.track_name),
         ]).then(([tracks, playlists]) => {
           setTrackResults(tracks);
           setPlaylistResults(playlists);
+          setIsLoadingSearch(false);
         });
       } else {
         setTrackResults([]);
@@ -283,6 +286,7 @@ const PlaylistManager = () => {
     }, 500);
     return () => clearTimeout(delay);
   }, [formData.track_name]);
+
   
 
   useEffect(() => {
@@ -326,33 +330,30 @@ const PlaylistManager = () => {
           <h2 className="text-2xl font-bold text-gray-800">Gestion de la Playlist</h2>
           <p className="text-gray-600">Gérez les musiques et consultez les votes de vos clients</p>
         </div>
-        <Button
-          variant="destructive"
-          className="flex items-center gap-2 px-4 py-2 text-white bg-red-600 hover:bg-red-700"
-          onClick={async () => {
-            if (confirm("Supprimer toute la playlist ?")) {
-              await deleteAllTracks(barId, userId);
-              toast({ title: "🧹 Playlist vidée" });
-              fetchPlaylist();
-            }
-          }}
-        >
-          <Trash2 className="w-4 h-4" />
-          Supprimer toute la playlist
-        </Button>
-
-        <Button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Ajouter une musique
-        </Button>
-        <Button onClick={loginWithSpotify}>Se connecter à Spotify</Button>
-        <Button onClick={debugSpotifyConnection} variant="outline">
-          Debug Spotify
-        </Button>
+        <div className="flex gap-4 ml-auto">
+          <Button
+            variant="destructive"
+            className="flex items-center gap-2 px-4 py-2 text-white bg-red-600 hover:bg-red-700"
+            onClick={async () => {
+              if (confirm("Supprimer toute la playlist ?")) {
+                await deleteAllTracks(barId, userId);
+                toast({ title: "🧹 Playlist vidée" });
+                fetchPlaylist();
+              }
+            }}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+          <Button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button onClick={loginWithSpotify}>Se connecter à Spotify</Button>
+        </div>
       </div>
+
 
       {showAddForm && (
         <Card className="bg-white/80 backdrop-blur-sm border-orange-200">
@@ -372,6 +373,13 @@ const PlaylistManager = () => {
                   required
                 />
               </div>
+              {isLoadingSearch && (
+                <div className="flex justify-center items-center gap-2 text-sm text-gray-600 mt-2">
+                  <div className="animate-spin h-5 w-5 border-2 border-t-transparent border-gray-500 rounded-full" />
+                  Recherche en cours...
+                </div>
+              )}
+
 
               {(trackResults.length > 0 || playlistResults.length > 0) && (
                 <div className="space-y-2 border rounded p-2 bg-white max-h-72 overflow-y-auto mt-2">
