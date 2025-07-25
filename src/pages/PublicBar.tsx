@@ -57,13 +57,17 @@ const PublicBar = () => {
 
 
     
-  const fetchItems = async () => {
+  const fetchItems = async (posId) => {
     try {
-      const response = await fetch(`https://kpsule.app/api/bars/${barId}/items`);
+      // Construire l'URL avec pos_id en query param
+      const url = new URL(`https://kpsule.app/api/bars/${barId}/items`);
+      if (posId) url.searchParams.append('pos_id', posId);
+  
+      const response = await fetch(url.toString());
       if (response.ok) {
         const data = await response.json();
         setItems(data.items);
-        console.log("Items reçus :", data.items); // 👈 ici
+        console.log("Items reçus :", data.items);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des items:', error);
@@ -89,7 +93,11 @@ const PublicBar = () => {
     } else if (posList.length) {
       setSelectedPos(posList[0].id);
     }
-  }, [posList]);  
+  }, [posList]);
+  useEffect(() => {
+    if (!barId || !selectedPos) return;
+    fetchItems(selectedPos);
+  }, [barId, selectedPos]);
   
   const fetchPlaylist = async () => {
     try {

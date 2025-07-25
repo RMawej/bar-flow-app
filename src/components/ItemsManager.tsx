@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthStore } from "@/store/authStore";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2 } from "lucide-react";
-import { Dialog, DialogTrigger, DialogContent,DialogTitle,DialogDescription, DialogClose } from "@/components/ui/dialog";
+import { Minus, Plus, ChevronLeft, ChevronRight, Edit, Trash2 } from "lucide-react";
+import { Dialog, DialogTrigger, DialogContent,DialogOverlay,DialogTitle,DialogDescription, DialogClose } from "@/components/ui/dialog";
 
 interface Item {
   id: number;
@@ -17,10 +17,19 @@ interface Item {
   image_url?: string;
   description?: string;
   production_time?: number;
+  pos_settings?: {
+    pos_id: string;
+    is_visible: boolean;
+    is_available: boolean;
+    stock_quantity: number;
+  }[];
 }
+
 
 const ItemsManager = () => {
   const { token, barId, userId } = useAuthStore();
+  const [pdvIndex, setPdvIndex] = useState(0);
+
   const [items, setItems] = useState<Item[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -28,8 +37,41 @@ const ItemsManager = () => {
   const isEditing = (id: number) => editingItem?.id === id;
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
-
-    const [formData, setFormData] = useState({
+  const [posList, setPosList] = useState<{ id: string; name: string }[]>([]);
+  const toggleAll = (field: "is_visible" | "is_available") => {
+    // détermine si tous sont déjà true
+    const allTrue = posList.every(p => posSettings[p.id]?.[field]);
+    setPosSettings(prev => {
+      const next = { ...prev };
+      posList.forEach(p => {
+        next[p.id] = { ...prev[p.id], [field]: !allTrue };
+      });
+      return next;
+    });
+  };
+  
+  useEffect(() => {
+    if (!token || !barId || !userId) return;
+    console.log('[DEBUG] fetching POS for bar', barId, 'with userId', userId);
+    fetch(`https://kpsule.app/api/bars/${barId}/pos`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'x-user-id': userId,
+      },
+    })
+      .then(res => {
+        console.log('[DEBUG] POS fetch status:', res.status);
+        return res.json();
+      })
+      .then(data => {
+        console.log('[DEBUG] POS list received:', data.points_of_sale);
+        setPosList(data.points_of_sale || []);
+      })
+      .catch(err => console.error('[ERROR] POS fetch error:', err));
+  }, [token, barId, userId]);
+  
+  const [posSettings, setPosSettings] = useState<{ [pos_id: string]: { is_visible: boolean; is_available: boolean } }>({});
+  const [formData, setFormData] = useState({
     name: "",
     price: "",
     image: "",
@@ -154,6 +196,15 @@ const ItemsManager = () => {
         const compressed = await compressImage(imageFile, 500);
         formDataToSend.append("file", compressed);
       }
+      // juste avant l’envoi
+      const posArray = Object.entries(posSettings).map(([pos_id, s]) => ({
+        pos_id,
+        is_visible: s.is_visible,
+        is_available: s.is_available,
+        stock_quantity: s.stock_quantity || 0
+      }));
+      formDataToSend.append("pos_data", JSON.stringify(posArray));
+
   
       const response = await fetch(url, {
         method,
@@ -222,109 +273,221 @@ const ItemsManager = () => {
           Ajouter un Nouvel Item
         </Button>
 
+        <DialogOverlay className="fixed inset-0 bg-black bg-opacity-50 z-40" />
+        <DialogContent
+  className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[90vw] max-w-[800px] max-h-[90vh] bg-white rounded-2xl p-6 overflow-auto"
+>
+  <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Header */}
+  <div className="lg:col-span-3 flex justify-between items-center mb-6">
+    <div>
+      <h2 className="text-2xl font-bold text-gray-800">
+        {editingItem ? "Modifier l'Item" : "Nouvel Item"}
+      </h2>
+      <p className="text-gray-600">
+        {editingItem ? "Mettez à jour les détails de votre item" : "Ajoutez un nouvel item"}
+      </p>
+    </div>
+  </div>
 
+  {/* ← Partie détails + PdV (2/3) */}
+  <div className="lg:col-span-2 space-y-6 pr-6">
+    {/* Champs de base */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <Label htmlFor="name">Nom *</Label>
+        <Input
+          id="name"
+          value={formData.name}
+          onChange={e => setFormData({ ...formData, name: e.target.value })}
+          required
+          className="shadow-inner"
+        />
+      </div>
+      <div>
+        <Label>Prix ($ CA) *</Label>
+        <div className="flex items-center border rounded overflow-hidden shadow-inner h-10">
+          <button
+            type="button"
+            onClick={() =>
+              setFormData(p => ({
+                ...p,
+                price: (Math.max(parseFloat(p.price) - 0.1, 0)).toFixed(1)
+              }))
+            }
+            className="px-3 hover:bg-gray-100"
+          >
+            <Minus size={16} />
+          </button>
+          <Input
+            id="price"
+            type="number"
+            step="0.1"
+            value={formData.price}
+            onChange={e => setFormData({ ...formData, price: e.target.value })}
+            className="text-center border-none flex-1 h-full"
+            required
+          />
+          <button
+            type="button"
+            onClick={() =>
+              setFormData(p => ({
+                ...p,
+                price: (parseFloat(p.price) + 0.1).toFixed(1)
+              }))
+            }
+            className="px-3 hover:bg-gray-100"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      </div>
+      <div className="md:col-span-2">
+        <Label htmlFor="production_time">Temps de préparation (min) *</Label>
+        <Input
+          id="production_time"
+          type="number"
+          step="0.1"
+          value={formData.production_time}
+          onChange={e => setFormData({ ...formData, production_time: e.target.value })}
+          required
+          className="shadow-inner"
+        />
+      </div>
+      <div className="md:col-span-2">
+        <Label>Description</Label>
+        <Textarea
+          rows={3}
+          value={formData.description}
+          onChange={e => setFormData({ ...formData, description: e.target.value })}
+          className="shadow-inner"
+        />
+      </div>
+    </div>
 
-
-      <DialogContent className="max-w-lg">
-      <DialogTitle>{editingItem ? "Modifier l'Item" : "Nouvel Item"}</DialogTitle>
-        <DialogDescription>Ajoutez un nouvel item à votre menu</DialogDescription>
-
-        <Card className="bg-white/80 backdrop-blur-sm border-orange-200">
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nom *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Ex: Mojito"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="price">Prix ($ CA) *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    placeholder="Ex: 8.50"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="production_time">Temps de préparation (min) *</Label>
-                  <Input
-                    id="production_time"
-                    type="number"
-                    step="0.1"
-                    value={formData.production_time}
-                    onChange={(e) => setFormData({ ...formData, production_time: e.target.value })}
-                    placeholder="Ex: 2.5"
-                    required
-                  />
-                </div>
-
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="image">Image</Label>
-                <Input
-                  id="image"
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const compressed = await compressImage(file, 500);
-                      setImageFile(compressed);
-                      setPreviewUrl(URL.createObjectURL(compressed));
+    {/* Carousel PdV */}
+    {posList.length > 0 && (
+      <div className="space-y-2">
+        <div className="flex justify-between items-center">
+          <Label className="font-medium">Paramètres par PdV</Label>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => toggleAll("is_visible")}>
+              Toggle Visible
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => toggleAll("is_available")}>
+              Toggle Dispo
+            </Button>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <Button type="button" size="icon" variant="ghost" onClick={() => setPdvIndex((pdvIndex - 1 + posList.length) % posList.length)}>
+            <ChevronLeft />
+          </Button>
+          <div className="flex-1 bg-gray-50 p-4 rounded shadow-inner">
+            <h4 className="font-semibold mb-2">{posList[pdvIndex].name}</h4>
+            <div className="flex items-center gap-4">
+              <Label className="flex items-center space-x-1">
+                <input
+                  type="checkbox"
+                  checked={posSettings[posList[pdvIndex].id]?.is_visible || false}
+                  onChange={e =>
+                    setPosSettings(prev => ({
+                      ...prev,
+                      [posList[pdvIndex].id]: {
+                        ...prev[posList[pdvIndex].id],
+                        is_visible: e.target.checked
+                      }
+                    }))
+                  }
+                />
+                <span>Visible</span>
+              </Label>
+              <Label className="flex items-center space-x-1">
+                <input
+                  type="checkbox"
+                  checked={posSettings[posList[pdvIndex].id]?.is_available || false}
+                  onChange={e =>
+                    setPosSettings(prev => ({
+                      ...prev,
+                      [posList[pdvIndex].id]: {
+                        ...prev[posList[pdvIndex].id],
+                        is_available: e.target.checked
+                      }
+                    }))
+                  }
+                />
+                <span>Disponible</span>
+              </Label>
+              <Input
+                type="number"
+                value={posSettings[posList[pdvIndex].id]?.stock_quantity || 0}
+                onChange={e =>
+                  setPosSettings(prev => ({
+                    ...prev,
+                    [posList[pdvIndex].id]: {
+                      ...prev[posList[pdvIndex].id],
+                      stock_quantity: parseInt(e.target.value)
                     }
-                  }}
-                />
-                {!previewUrl && formData.image && (
-                  <img
-                    src={formData.image}
-                    alt="Image actuelle"
-                    className="rounded-md mt-2 max-h-48 object-contain"
-                  />
-                )}
-                {previewUrl && (
-                  <img
-                    src={previewUrl}
-                    alt="Prévisualisation"
-                    className="rounded-md mt-2 max-h-48 object-contain"
-                  />
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Description de l'item..."
-                  rows={3}
-                />
-              </div>
-              <div className="flex space-x-2">
-                <Button type="submit" className="bg-green-600 hover:bg-green-700">
-                  {editingItem ? "Modifier" : "Ajouter"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setOpen(false)}
-                >
-                  Annuler
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </DialogContent>
+                  }))
+                }
+                className="w-20"
+              />
+            </div>
+          </div>
+          <Button type="button" size="icon" variant="ghost" onClick={() => setPdvIndex((pdvIndex + 1) % posList.length)}>
+            <ChevronRight />
+          </Button>
+        </div>
+      </div>
+    )}
+  </div>
+
+  {/* → Image (1/3) */}
+  <div className="flex flex-col items-center space-y-4">
+    <Label>Image</Label>
+    <div className="w-full h-48 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+      {(previewUrl || formData.image) ? (
+        <img
+          src={previewUrl || formData.image}
+          alt="Preview"
+          className="object-contain w-full h-full"
+        />
+      ) : (
+        <span className="text-gray-400">Aucune image</span>
+      )}
+    </div>
+    <Button type="button" variant="outline" onClick={() => document.getElementById("image")?.click()}>
+      Sélectionner une image
+    </Button>
+    <Input
+      id="image"
+      type="file"
+      accept="image/*"
+      onChange={async e => {
+        const file = e.target.files?.[0];
+        if (file) {
+          const compressed = await compressImage(file, 500);
+          setImageFile(compressed);
+          setPreviewUrl(URL.createObjectURL(compressed));
+        }
+      }}
+      className="hidden"
+    />
+  </div>
+
+  {/* Actions */}
+  <div className="lg:col-span-3 mt-8 flex justify-end gap-4">
+    <Button type="button"variant="outline" onClick={() => setOpen(false)}>
+      Annuler
+    </Button>
+    <Button type="submit" className="bg-green-600 hover:bg-green-700">
+      {editingItem ? "Modifier" : "Ajouter"}
+    </Button>
+  </div>
+  </form>
+
+</DialogContent>
+
       </Dialog>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -373,8 +536,21 @@ const ItemsManager = () => {
                     description: item.description || "",
                     production_time: item.production_time?.toString() || "",
                   });
+                
+                  const initialSettings: PosSettings = {};
+                  if (item.pos_settings) {
+                    for (const s of item.pos_settings) {
+                      initialSettings[s.pos_id] = {
+                        is_visible: s.is_visible,
+                        is_available: s.is_available,
+                        stock_quantity: s.stock_quantity,
+                      };
+                    }
+                  }
+                  setPosSettings(initialSettings);
+                
                   setOpen(true);
-                }}
+                }}                
               >
                 <Edit className="w-10 h-10" />
               </Button>
