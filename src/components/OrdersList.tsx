@@ -223,7 +223,7 @@ const OrdersList = ({
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                  {console.log("🧾 Items de la commande", order.id, order.items) || order.items?.map((item, index) => (
+                  {order.items?.map((item, index) => (
                       <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                         <div>
                           <p className="font-medium">{item.item_name}</p>

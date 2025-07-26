@@ -3,6 +3,7 @@ import OrdersList from "@/components/OrdersList";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { useParams } from "react-router-dom";
+import ItemsModal from "@/components/ItemsModal"; // ajuste le chemin si besoin
 
 const BarTender = () => {
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -12,6 +13,7 @@ const BarTender = () => {
   const [posName, setPosName] = useState<string | null>(null);
   const [digits, setDigits] = useState(["", "", "", ""]);
   const inputsRef = useRef<HTMLInputElement[]>([]);
+  const [items, setItems] = useState<any[]>([]);
 
   useEffect(() => {
     if (!pos_id) return;
@@ -25,7 +27,23 @@ const BarTender = () => {
 
   useEffect(() => {
     if (!isAuthorized || !posToken || !pos_id) return;
-  
+
+    fetch(`https://kpsule.app/api/pos/${pos_id}/items`, {
+      headers: { token: posToken },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("✅ Items récupérés :", pos_id, data.items);
+        setItems(data.items);
+      })
+      .catch((err) => console.error("❌ Erreur chargement items", err));
+  }, [isAuthorized, posToken, pos_id]);
+
+
+
+
+  useEffect(() => {
+    if (!isAuthorized || !posToken || !pos_id) return;
     const ws = new WebSocket(
       `wss://kpsule.app/ws?pos_id=${pos_id}&token=${posToken}`
     );    
@@ -139,6 +157,7 @@ const BarTender = () => {
       <h1 className="text-3xl font-bold mb-6 text-orange-700 text-center">
         Point de Vente {posName} – Commandes
       </h1>
+
       <div className="flex justify-center gap-4 mb-4">
         <Button variant={filterDone === "all" ? "default" : "outline"} onClick={() => setFilterDone("all")}>
           Toutes
@@ -150,7 +169,13 @@ const BarTender = () => {
           En cours
         </Button>
       </div>
+
+      <div className="flex justify-center mb-6">
+        <ItemsModal items={items} />
+      </div>
+
       <OrdersList filter={filterDone} pos_id={pos_id} pos_token={posToken} />
+
     </div>
   );
 };

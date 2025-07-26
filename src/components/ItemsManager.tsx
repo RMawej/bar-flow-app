@@ -96,7 +96,10 @@ const ItemsManager = () => {
       
       if (response.ok) {
         const data = await response.json();
+        console.log('[LOG] Items fetched:', data.items?.length, 'items loaded');
         setItems(Array.isArray(data.items) ? data.items : []);
+        console.log("[DEBUG] Items détaillés:", data.items);
+
       }      
     } catch (error) {
       console.error('Erreur lors du chargement des items:', error);
@@ -105,6 +108,7 @@ const ItemsManager = () => {
         description: "Impossible de charger les items",
         variant: "destructive",
       });
+      console.error('[ERROR] fetchItems failed:', error);
     } finally {
       setIsLoading(false);
     }
@@ -113,6 +117,22 @@ const ItemsManager = () => {
   useEffect(() => {
     fetchItems();
   }, [token, barId]);
+
+  useEffect(() => {
+    if (!editingItem || posList.length === 0) return;
+
+    const initialSettings: typeof posSettings = {};
+    for (const pos of posList) {
+      const match = editingItem.pos_settings?.find(s => s.pos_id === pos.id);
+      initialSettings[pos.id] = {
+        is_visible: match?.is_visible ?? false,
+        is_available: match?.is_available ?? false,
+        stock_quantity: match?.stock_quantity ?? 0,
+      };
+    }
+    setPosSettings(initialSettings);
+  }, [editingItem, posList]);
+
 
   const handleDelete = async (itemId: string) => {
     const now = Date.now();
@@ -179,6 +199,7 @@ const ItemsManager = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token || !barId) return;
+    console.log('[LOG] handleSubmit called - mode:', editingItem ? 'edit' : 'create');
   
     try {
       const url = editingItem
@@ -204,6 +225,13 @@ const ItemsManager = () => {
         stock_quantity: s.stock_quantity || 0
       }));
       formDataToSend.append("pos_data", JSON.stringify(posArray));
+      console.log('[LOG] FormData ready to send:', {
+        name: formData.name,
+        price: formData.price,
+        description: formData.description,
+        production_time: formData.production_time,
+        posSettings
+      });
 
   
       const response = await fetch(url, {
@@ -216,9 +244,9 @@ const ItemsManager = () => {
       });
 
       if (response.ok) {
+        console.log('[LOG] Item', editingItem?.id || '[new]', 'successfully', editingItem ? 'updated' : 'created');
         const updated = await response.json();
         toast({ title: "Succès", description: editingItem ? "Item modifié" : "Item ajouté" });
-          // 🔔 ENVOI DE LA NOTIFICATION (seulement si modifié)
       if (editingItem) {
         await fetch("https://kpsule.app/api/notify", {
           method: "POST",
@@ -231,11 +259,8 @@ const ItemsManager = () => {
           }),
         });
       }
-        setItems((prev) =>
-          editingItem
-            ? prev.map((item) => (item.id === editingItem.id ? updated.item : item))
-            : [...prev, updated.item]
-        );
+        await fetchItems();
+
         setFormData({ name: "", price: "", image: "", description: "" });
         setImageFile(null);
         setPreviewUrl("");
@@ -245,6 +270,7 @@ const ItemsManager = () => {
         throw new Error("Échec de l'opération");
       }
     } catch (error) {
+      console.error('[ERROR] handleSubmit failed:', error);
       toast({
         title: "Erreur",
         description: editingItem ? "Impossible de modifier l'item" : "Impossible d'ajouter l'item",
@@ -372,10 +398,10 @@ const ItemsManager = () => {
           <Label className="font-medium">Paramètres par PdV</Label>
           <div className="flex gap-2">
             <Button type="button" size="sm" variant="outline" onClick={() => toggleAll("is_visible")}>
-              Toggle Visible
+              Visible dans tous
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={() => toggleAll("is_available")}>
-              Toggle Dispo
+              Dispo dans tous
             </Button>
           </div>
         </div>
@@ -503,10 +529,42 @@ const ItemsManager = () => {
         ) : (
           items.filter((item): item is Item => item && typeof item.id !== 'undefined' && typeof item.name === 'string')
           .map((item) => (
+
             <div
               key={item.id}
               className="relative h-64 rounded-xl overflow-hidden group shadow-md transition transform hover:scale-[1.02] flex items-center justify-center text-white"
             >
+            <div className="absolute top-2 left-2 flex flex-col gap-1 z-20 text-sm">
+              <div
+                className="bg-green-600 text-white px-2 py-0.5 rounded shadow"
+                title={item.pos_settings?.map(p => {
+                  const posName = posList.find(pos => pos.id === p.pos_id)?.name || p.pos_id;
+                  return `${posName} : ${p.is_available ? "✅" : "❌"}`;
+                }).join("\n")}
+              >
+                Dispo : {item.pos_settings?.filter(p => p.is_available).length || 0}
+              </div>
+              <div
+                className="bg-blue-600 text-white px-2 py-0.5 rounded shadow"
+                title={item.pos_settings?.map(p => {
+                  const posName = posList.find(pos => pos.id === p.pos_id)?.name || p.pos_id;
+                  return `${posName} : ${p.is_visible ? "👁️" : "🚫"}`;
+                }).join("\n")}
+              >
+                Visible : {item.pos_settings?.filter(p => p.is_visible).length || 0}
+              </div>
+              <div
+                className="bg-gray-800 text-white px-2 py-0.5 rounded shadow"
+                title={item.pos_settings?.map(p => {
+                  const posName = posList.find(pos => pos.id === p.pos_id)?.name || p.pos_id;
+                  return `${posName} : ${p.stock_quantity}`;
+                }).join("\n")}
+              >
+                Stock : {item.pos_settings?.reduce((sum, p) => sum + (p.stock_quantity || 0), 0) || 0}
+              </div>
+            </div>
+
+
             <div
               className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
               style={{ backgroundImage: `url(${item.image_url || "/placeholder.jpg"})` }}
@@ -536,19 +594,6 @@ const ItemsManager = () => {
                     description: item.description || "",
                     production_time: item.production_time?.toString() || "",
                   });
-                
-                  const initialSettings: PosSettings = {};
-                  if (item.pos_settings) {
-                    for (const s of item.pos_settings) {
-                      initialSettings[s.pos_id] = {
-                        is_visible: s.is_visible,
-                        is_available: s.is_available,
-                        stock_quantity: s.stock_quantity,
-                      };
-                    }
-                  }
-                  setPosSettings(initialSettings);
-                
                   setOpen(true);
                 }}                
               >

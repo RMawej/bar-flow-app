@@ -39,6 +39,10 @@ const PublicBar = () => {
   const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null);
 
   const [posList, setPosList] = useState<{id:string; name:string; slug:string;}[]>([]);
+  const posNames: Record<string,string> = posList.reduce((acc, pos) => {
+    acc[pos.id] = pos.name;
+    return acc;
+  }, {});
   const [selectedPos, setSelectedPos] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -59,26 +63,40 @@ const PublicBar = () => {
   const [viewStyle, setViewStyle] = useState<"1"| "3" | "5">("3");
   const orderSectionRef = useRef<HTMLDivElement | null>(null);
   const [showCartModal, setShowCartModal] = useState(false);
+  const [allItems, setAllItems] = useState<Item[]>([]);
 
 
 
     
-  const fetchItems = async (posId) => {
-    try {
-      // Construire l'URL avec pos_id en query param
-      const url = new URL(`https://kpsule.app/api/bars/${barId}/items`);
-      if (posId) url.searchParams.append('pos_id', posId);
-  
-      const response = await fetch(url.toString());
-      if (response.ok) {
-        const data = await response.json();
-        setItems(data.items);
-        console.log("Items reçus :", data.items);
+  useEffect(() => {
+    if (!barId) return;
+    const fetchAllItems = async () => {
+      try {
+        const response = await fetch(`https://kpsule.app/api/bars/${barId}/items`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log("✅ Tous les items récupérés :", data.items);
+          setAllItems(data.items);
+        }
+      } catch (error) {
+        console.error("❌ Erreur chargement items globaux :", error);
       }
-    } catch (error) {
-      console.error('Erreur lors du chargement des items:', error);
-    }
-  };
+    };
+    fetchAllItems();
+  }, [barId]);
+
+  useEffect(() => {
+    if (!selectedPos || !allItems.length) return;
+
+    const visibles = allItems.filter(item =>
+      item.pos_settings?.some(p => p.pos_id === selectedPos && p.is_visible === 1)
+    );
+
+    setItems(visibles);
+  }, [selectedPos, allItems]);
+
+
+
 
   useEffect(() => {
     if (!barId) return;
@@ -113,10 +131,6 @@ const PublicBar = () => {
       setSelectedPos(posList[0].id);
     }
   }, [posList]);
-  useEffect(() => {
-    if (!barId || !selectedPos) return;
-    fetchItems(selectedPos);
-  }, [barId, selectedPos]);
   
   const fetchPlaylist = async () => {
     try {
@@ -144,7 +158,21 @@ const PublicBar = () => {
     const lastCmd = localStorage.getItem("last_command");
 
     if (savedName) setClientName(savedName);
-    if (savedPhone) setPhoneNumber(savedPhone);
+  if (savedPhone) {
+    console.log("📦 Téléphone sauvegardé trouvé :", savedPhone);
+    const match = savedPhone.match(/^(\+(1|33))(\d{9,})$/);
+    if (match) {
+      console.log("✅ Préfixe détecté :", match[1]);
+      console.log("✅ Numéro détecté :", match[3]);
+      setPhonePrefix(match[1]);
+      setPhoneNumber(match[3]);
+    } else {
+      console.warn("⚠️ Format inattendu du numéro :", savedPhone);
+      setPhonePrefix("+1");
+      setPhoneNumber(savedPhone.replace(/\D/g, ""));
+    }
+  }
+
 
     if (savedId) {
       console.log("Saved Client ID:", savedId);
@@ -243,6 +271,7 @@ const PublicBar = () => {
       return updatedCart;
     });
   };
+  
   
 
   const removeFromCart = (itemId: number) => {
@@ -356,7 +385,18 @@ const PublicBar = () => {
       });
     }
   };
+  const sortedItems = [...items].sort((a, b) => {
+    const aPos = a.pos_settings?.find(p => p.pos_id === selectedPos);
+    const bPos = b.pos_settings?.find(p => p.pos_id === selectedPos);
+    const aAvailable = aPos?.is_available === 1;
+    const bAvailable = bPos?.is_available === 1;
+    const aOther = !aAvailable && a.pos_settings?.some(p => p.is_available === 1);
+    const bOther = !bAvailable && b.pos_settings?.some(p => p.is_available === 1);
 
+    if (aAvailable !== bAvailable) return bAvailable - aAvailable;  // dispo d'abord
+    if (aOther     !== bOther)     return bOther     - aOther;      // dispo autre PdV
+    return 0;
+  });
 
   const handleSuggestTrack = async () => {
     if (!newTrackName) {
@@ -634,15 +674,47 @@ const PublicBar = () => {
                       </Button>
                     ))}
                 </div>
+
                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Notre Menu</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {items.map((item) => renderItemCard(
-                  item,
-                  viewStyle,
-                  () => addToCart(item),
-                  () => removeFromCart(item.id),
-                  cart.find(i => i.id === item.id)?.quantity || 0
-                ))}
+                  {sortedItems.map((item) => {
+                    const posData = item.pos_settings?.find(p => p.pos_id === selectedPos);
+                    const isAvailable = posData?.is_available === 1;
+
+                    const otherPos = !isAvailable
+                      ? item.pos_settings?.find(p => p.is_available === 1 && p.pos_id !== selectedPos)
+                      : null;
+
+                    return (
+                      <div key={item.id} className="relative">
+                        {!isAvailable && (
+                          <div className="absolute top-0 left-0 right-0 z-10 bg-red-600 text-white text-xs font-bold text-center py-1 rounded-t-md shadow-md">
+                            Victime de son succès
+                            {otherPos && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedPos(otherPos.pos_id);
+                                }}
+                                className="ml-2 underline hover:text-orange-200"
+                              >
+                                → Voir au {posNames?.[otherPos.pos_id] || "autre PdV"}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        <div className={!isAvailable ? "opacity-50 pointer-events-none" : ""}>
+                          {renderItemCard(
+                            item,
+                            viewStyle,
+                            () => addToCart(item),
+                            () => removeFromCart(item.id),
+                            cart.find(i => i.id === item.id)?.quantity || 0
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -954,6 +1026,9 @@ const PublicBar = () => {
   );
 };
 
+const findOtherPosWithItem = (item: any) => {
+  return item.pos_settings?.find(p => p.is_available === 1 && p.pos_id !== selectedPos);
+};
 
 export default PublicBar;
 

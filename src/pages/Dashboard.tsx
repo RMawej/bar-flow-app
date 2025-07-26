@@ -15,6 +15,8 @@ const Dashboard = () => {
   const { logout, barId, userId } = useAuthStore();
 
   const [barName, setBarName] = useState("");
+  const [formPaymentMode, setFormPaymentMode] = useState("stripe");
+
   const [activeTab, setActiveTab] = useState(() => {
     return new URLSearchParams(window.location.search).get("tab") || "items";
   });
@@ -55,10 +57,12 @@ const Dashboard = () => {
       if (selected) {
         setFormName(selected.name);
         setFormSlug(selected.slug);
+        setFormPaymentMode(selected?.payment_mode || "stripe");
       }
     } else {
       setFormName("");
       setFormSlug("");
+      setFormPaymentMode("stripe");
     }
   }, [selectedPos, posList]);
 
@@ -89,7 +93,7 @@ const Dashboard = () => {
   const submitForm = async () => {
     const method = selectedPos ? 'PUT' : 'POST';
     const url = selectedPos
-      ? `https://kpsule.app/api/bars/${barId}/pos/${selectedPos.id}`
+      ? `https://kpsule.app/api/bars/${barId}/pos/${selectedPos}`
       : `https://kpsule.app/api/bars/${barId}/pos`;
     const res = await fetch(url, {
       method,
@@ -97,7 +101,7 @@ const Dashboard = () => {
         'Content-Type': 'application/json',
         'x-user-id': userId
       },
-      body: JSON.stringify({ name: formName, slug: formSlug })
+      body: JSON.stringify({ name: formName, slug: formSlug, passcode: "0000", payment_mode: formPaymentMode })
     });
     if (!res.ok) throw new Error(res.statusText);
     const refresh = await fetch(`https://kpsule.app/api/bars/${barId}/pos`, {
@@ -221,6 +225,15 @@ const Dashboard = () => {
                     onChange={e => setFormSlug(e.target.value)}
                     className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
+                  <select
+                    value={formPaymentMode}
+                    onChange={e => setFormPaymentMode(e.target.value)}
+                    className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="stripe">Paiement en ligne (Stripe)</option>
+                    <option value="hybrid">Hybride</option>
+                    <option value="takeaway">Paiement au comptoir</option>
+                  </select>
                   <div className="flex gap-2">
                     <Button
                       onClick={submitForm}
