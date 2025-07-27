@@ -174,12 +174,20 @@ const PublicBar = () => {
   }
 
 
-    if (savedId) {
+    if (savedPhone) {
       console.log("Saved Client ID:", savedId);
-      fetch(`https://kpsule.app/api/public/bars/${barId}/commands/by-client?client_id=${savedId}`)
+      fetch(`https://kpsule.app/api/public/bars/${barId}/commands/by-phone?phone=${phoneNumber}`)
         .then(res => res.json())
         .then(data => {
-          if (data?.id) setCurrentCommand(data);
+          console.log(data);
+          console.log("🎯 pickup_code:", data.pickup_code);
+          console.log("🎯 pickup_color:", data.pickup_color);
+
+          if (data?.id) {
+            setCurrentCommand(data);
+            setPickupCode(data.pickup_code);
+            setPickupColor(data.pickup_color);
+          }
           if (data?.status === "done") {
             localStorage.removeItem("client_id");
             setLastCommand(data);

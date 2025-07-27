@@ -246,7 +246,7 @@ const ItemsManager = () => {
       if (response.ok) {
         console.log('[LOG] Item', editingItem?.id || '[new]', 'successfully', editingItem ? 'updated' : 'created');
         const updated = await response.json();
-        toast({ title: "Succès", description: editingItem ? "Item modifié" : "Item ajouté" });
+        //toast({ title: "Succès", description: editingItem ? "Item modifié" : "Item ajouté" });
       if (editingItem) {
         await fetch("https://kpsule.app/api/notify", {
           method: "POST",
@@ -428,36 +428,50 @@ const ItemsManager = () => {
                 />
                 <span>Visible</span>
               </Label>
-              <Label className="flex items-center space-x-1">
-                <input
-                  type="checkbox"
-                  checked={posSettings[posList[pdvIndex].id]?.is_available || false}
-                  onChange={e =>
-                    setPosSettings(prev => ({
-                      ...prev,
-                      [posList[pdvIndex].id]: {
-                        ...prev[posList[pdvIndex].id],
-                        is_available: e.target.checked
+              <Label
+                    className="flex items-center space-x-1"
+                    title="Pour rendre l’item disponible, le stock doit être > 0"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={
+                        posSettings[posList[pdvIndex].id]?.stock_quantity > 0
+                          ? posSettings[posList[pdvIndex].id]?.is_available
+                          : false
                       }
-                    }))
-                  }
-                />
-                <span>Disponible</span>
-              </Label>
-              <Input
-                type="number"
-                value={posSettings[posList[pdvIndex].id]?.stock_quantity || 0}
-                onChange={e =>
-                  setPosSettings(prev => ({
-                    ...prev,
-                    [posList[pdvIndex].id]: {
-                      ...prev[posList[pdvIndex].id],
-                      stock_quantity: parseInt(e.target.value)
-                    }
-                  }))
-                }
-                className="w-20"
-              />
+                      disabled={posSettings[posList[pdvIndex].id]?.stock_quantity <= 0}
+                      onChange={e =>
+                        setPosSettings(prev => ({
+                          ...prev,
+                          [posList[pdvIndex].id]: {
+                            ...prev[posList[pdvIndex].id],
+                            is_available: e.target.checked
+                          }
+                        }))
+                      }
+                    />
+                    <span>Disponible</span>
+                  </Label>
+
+
+                  <Input
+                    type="number"
+                    value={posSettings[posList[pdvIndex].id]?.stock_quantity || 0}
+                    onChange={e => {
+                      const qty = Math.max(0, parseInt(e.target.value) || 0);
+                      const pos_id = posList[pdvIndex].id;
+                      setPosSettings(prev => ({
+                        ...prev,
+                        [pos_id]: {
+                          ...prev[pos_id],
+                          stock_quantity: qty,
+                          is_available: qty > 0 ? prev[pos_id]?.is_available : false,
+                        }
+                      }));
+                    }}
+                    className="w-20"
+                  />
+
             </div>
           </div>
           <Button type="button" size="icon" variant="ghost" onClick={() => setPdvIndex((pdvIndex + 1) % posList.length)}>
