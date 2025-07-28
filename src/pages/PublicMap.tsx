@@ -36,10 +36,16 @@ const PublicMap = () => {
   const [searchType, setSearchType] = useState("item"); // "item" ou "music"
   
   useEffect(() => {
-    fetch("https://kpsule.app/api/bars/locations")
-      .then(res => res.json())
-      .then(data => setBars(data?.locations ?? []));
-      }, []);
+    fetch("https://kpsule.app/api/public/bars/locations", {
+      headers: {}
+    })
+      .then(res => {
+        console.log("Status :", res.status);
+        return res.json();
+      })
+      .then(data => console.log(data))
+      .catch(err => console.error(err));
+    }, []);
 
   const openItemsModal = async (bar_id) => {
     const res = await fetch(`https://kpsule.app/api/bars/${bar_id}/items`);
@@ -70,11 +76,11 @@ const PublicMap = () => {
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       if (searchTerm.trim()) {
-        const res = await fetch(`https://kpsule.app/api/bars/search?${searchType}=${encodeURIComponent(searchTerm)}`);
+        const res = await fetch(`https://kpsule.app/api/public/bars/search?${searchType}=${encodeURIComponent(searchTerm)}`);
         const data = await res.json();
         setSuggestions(data.results ?? []);
       } else {
-        const res = await fetch("https://kpsule.app/api/bars/locations");
+        const res = await fetch("https://kpsule.app/api/public/bars/locations");
         const data = await res.json();
         setBars(data.locations ?? []);
         setSuggestions([]);
