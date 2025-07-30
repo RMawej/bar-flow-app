@@ -175,13 +175,16 @@ const PublicBar = () => {
 
 
     if (savedPhone) {
-      console.log("Saved Client ID:", savedId);
-      fetch(`https://kpsule.app/api/public/bars/${barId}/commands/by-phone?phone=${phoneNumber}`)
+      const url = `https://kpsule.app/api/public/bars/${barId}/commands/by-phone?phone=${encodeURIComponent(phoneNumber)}`;
+      console.log("📡 Fetch last command URL:", url);
+      console.log("🧾 savedPhone:", savedPhone, " phoneNumber(raw):", phoneNumber);
+
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           console.log(data);
-          console.log("🎯 pickup_code:", data.pickup_code);
-          console.log("🎯 pickup_color:", data.pickup_color);
+          console.log("🎯 pickup_coddwdwde:", data.pickup_code);
+          console.log("🎯 pickup_cdwdwolor:", data.pickup_color);
 
           if (data?.id) {
             setCurrentCommand(data);
@@ -193,6 +196,7 @@ const PublicBar = () => {
             setLastCommand(data);
             setCurrentCommand(null);
           }
+
         });
     } else if (lastCmd) {
       try {
