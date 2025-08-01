@@ -5,18 +5,29 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-const getCustomIcon = (music) =>
-  new L.Icon({
+const getCustomIcon = (music, tags) => {
+  let tagArray = [];
+  try {
+    tagArray = typeof tags === "string" ? JSON.parse(tags) : tags;
+  } catch {
+    tagArray = [];
+  }
+
+  return new L.Icon({
     iconUrl:
-      music?.toLowerCase() === "jazz"
+      tagArray?.some(tag => typeof tag === "string" && ["karaoke", "lounge"].includes(tag.toLowerCase()))
+        ? "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
+        : music?.toLowerCase().includes("jazz")
         ? "https://maps.google.com/mapfiles/ms/icons/blue-dot.png"
-        : music?.toLowerCase() === "rock"
+        : music?.toLowerCase().includes("rock")
         ? "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
         : "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
     iconSize: [50, 50],
     iconAnchor: [16, 32],
     popupAnchor: [0, -32],
   });
+};
+
 
 const PublicMap = () => {
   const [bars, setBars] = useState<any[]>([]);
@@ -54,9 +65,7 @@ const PublicMap = () => {
     setShowItemsModal(true);
   };
 
-  useEffect(() => {
-    console.log("Tous les markers enregistrés :", markerRefs.current);
-  }, [bars]);
+
   
 
   const openPlaylistModal = async (bar_id) => {
@@ -118,7 +127,11 @@ const PublicMap = () => {
       />
       {suggestions.length > 0 && (
         <div className="absolute bg-white border mt-1 rounded shadow z-50 max-h-60 overflow-auto w-[300px] left-0 top-full">
-        {suggestions.map((sug, idx) => (
+        {suggestions.map((sug, idx) => 
+        {
+          const matchedBar = bars.find(b => b.bar_id === sug.bar_id);
+          const barName = matchedBar?.name || sug.bar_id;
+        return (
             <div
               key={idx}
               onClick={() => {
@@ -140,9 +153,9 @@ const PublicMap = () => {
               
               className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
             >
-              {sug.match_term} – {sug.bar_id}
+              {sug.match_term} – {barName}
             </div>
-          ))}
+          )})}
         </div>
       )}
 
@@ -158,9 +171,8 @@ const PublicMap = () => {
             <Marker
               key={bar.id}
               position={[bar.lat, bar.lng]}
-              icon={getCustomIcon(bar.music)}
+              icon={getCustomIcon(bar.music, bar.tags_fr || bar.tags)}
               ref={(ref) => {
-                console.log("Marker ref →", bar.bar_id, ref);
                 if (ref) markerRefs.current[bar.bar_id] = ref;
               }}              
               eventHandlers={{
@@ -170,33 +182,73 @@ const PublicMap = () => {
               }}
             >
 
-              <Popup>
-                <h2 className="font-bold">{bar.name || "Bar"}</h2>
-                <p>Musique : {bar.music}</p>
-                <p>Prix : {bar.price}</p>
-                {bar.url && (
-                  <button
-                    className="text-blue-600 underline mt-2"
-                    onClick={() => window.open(bar.url, "_blank")}
-                  >
-                    Voir le site
-                  </button>
-                )}
-                <br />
-                <button
-                  className="text-green-600 underline mt-2"
-                  onClick={() => openItemsModal(bar.bar_id)}
-                >
-                  Voir les items
-                </button>
-                <br />
-                <button
-                  className="text-purple-600 underline mt-1"
-                  onClick={() => openPlaylistModal(bar.bar_id)}
-                >
-                  Voir les musiques
-                </button>
-              </Popup>
+          <Popup>
+            <h2 className="font-bold">{bar.name || "Bar"}</h2>
+
+            {bar.description_fr || bar.description ? (
+              <p className="text-sm italic mb-1">
+                {bar.description_fr || bar.description}
+              </p>
+            ) : null}
+
+            {bar.music_fr || bar.music ? (
+              <p>🎶 Musique : {
+                Array.isArray(bar.music_fr)
+                  ? bar.music_fr.join(", ")
+                  : Array.isArray(bar.music)
+                  ? bar.music.join(", ")
+                  : (() => {
+                      try {
+                        const parsed = JSON.parse(bar.music || "[]");
+                        return Array.isArray(parsed) ? parsed.join(", ") : "";
+                      } catch {
+                        return bar.music;
+                      }
+                    })()
+              }</p>
+            ) : null}
+
+            {bar.tags_fr || bar.tags ? (
+              <p>🏷️ Tags : {
+                Array.isArray(bar.tags_fr)
+                  ? bar.tags_fr.join(", ")
+                  : (() => {
+                      try {
+                        const parsed = JSON.parse(bar.tags || "[]");
+                        return Array.isArray(parsed) ? parsed.join(", ") : "";
+                      } catch {
+                        return bar.tags;
+                      }
+                    })()
+              }</p>
+            ) : null}
+
+            {bar.price ? <p>💰 Prix : {bar.price}</p> : null}
+
+            {bar.url && (
+              <button
+                className="text-blue-600 underline mt-2"
+                onClick={() => window.open(bar.url, "_blank")}
+              >
+                Voir le site
+              </button>
+            )}
+            <br />
+            <button
+              className="text-green-600 underline mt-2"
+              onClick={() => openItemsModal(bar.bar_id)}
+            >
+              Voir les items
+            </button>
+            <br />
+            <button
+              className="text-purple-600 underline mt-1"
+              onClick={() => openPlaylistModal(bar.bar_id)}
+            >
+              Voir les musiques
+            </button>
+          </Popup>
+
             </Marker>
           ))}
         </MapContainer>
