@@ -170,7 +170,7 @@ const OrdersList = ({
                       <User className="h-5 w-5 text-orange-600" />
                       <span>{order.client_name}</span>
                     </CardTitle>
-                    <Badge
+                    <div
                       onClick={async () => {
                         const next = {
                           pending: "in_progress",
@@ -178,22 +178,23 @@ const OrdersList = ({
                           ready: "done",
                           done: "pending",
                         }[order.status] || "pending";
-                        
+
                         try {
                           const url = pos_token
-                          ? `https://kpsule.app/api/pos/${pos_id}/commands/${order.id}/status`
-                          : `https://kpsule.app/api/bars/${barId}/commands/${order.id}/status`;
-                        
-                        const headers: Record<string, string> = {
-                          "Content-Type": "application/json",
-                          ...(pos_token ? { token: pos_token } : { "x-user-id": userId }),
-                        };
-                        
-                        const res = await fetch(url, {
-                          method: "POST",
-                          headers,
-                          body: JSON.stringify({ status: next }),
-                        });
+                            ? `https://kpsule.app/api/pos/${pos_id}/commands/${order.id}/status`
+                            : `https://kpsule.app/api/bars/${barId}/commands/${order.id}/status`;
+
+                          const headers: Record<string, string> = {
+                            "Content-Type": "application/json",
+                            ...(pos_token ? { token: pos_token } : { "x-user-id": userId }),
+                          };
+
+                          const res = await fetch(url, {
+                            method: "POST",
+                            headers,
+                            body: JSON.stringify({ status: next }),
+                          });
+
                           if (res.ok) {
                             setOrders((prev) =>
                               prev.map((o) =>
@@ -201,7 +202,6 @@ const OrdersList = ({
                               )
                             );
                           }
-                          
                         } catch (e) {
                           toast({
                             title: "Erreur",
@@ -210,15 +210,15 @@ const OrdersList = ({
                           });
                         }
                       }}
-                      className={`${getStatusColor(order.status)} cursor-pointer`}
+                      className={`w-1/3 flex items-center justify-center ${getStatusColor(order.status)} rounded-md ml-4 cursor-pointer`}
                     >
                       {order.status}
-                    </Badge>
+                    </div>
+
                   </div>
                   <CardDescription className="flex items-center space-x-2">
                     <Clock className="h-4 w-4" />
                     <span>{formatTime(order.created_at)}</span>
-                    <span>• Commande #{order.id}</span>
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -247,50 +247,55 @@ const OrdersList = ({
                 </CardContent>
               </Card>
 
-              {order.status === "ready" && order.pickup_code && (
-                <div
-                  className="absolute inset-0 flex items-center justify-center text-white text-4xl font-bold cursor-pointer"
-                  style={{
-                    backgroundColor: order.pickup_color || "#000000cc",
-                    borderRadius: "0.5rem",
-                  }}
-                  onClick={async () => {
-                    try {
-                      const url = pos_token
-                        ? `https://kpsule.app/api/pos/${pos_id}/commands/${order.id}/status`
-                        : `https://kpsule.app/api/bars/${barId}/commands/${order.id}/status`;
-                      
-                      const headers: Record<string, string> = {
-                        "Content-Type": "application/json",
-                        ...(pos_token ? { token: pos_token } : { "x-user-id": userId }),
-                      };
-                      
-                      const res = await fetch(url, {
-                        method: "POST",
-                        headers,
-                        body: JSON.stringify({ status: "done" }),
-                      });
-                    
+            {order.status === "ready" && order.pickup_code && (
+              <div
+                className="absolute inset-0 p-6 text-white text-center cursor-pointer flex flex-col justify-center rounded-md"
+                style={{ backgroundColor: order.pickup_color || "#000000cc" }}
+                onClick={async () => {
+                  try {
+                    const url = pos_token
+                      ? `https://kpsule.app/api/pos/${pos_id}/commands/${order.id}/status`
+                      : `https://kpsule.app/api/bars/${barId}/commands/${order.id}/status`;
 
-                      if (res.ok) {
-                        setOrders((prev) =>
-                          prev.map((o) =>
-                            o.id === order.id ? { ...o, status: "done" } : o
-                          )
-                        );
-                      }
-                    } catch (e) {
-                      toast({
-                        title: "Erreur",
-                        description: "Impossible de passer la commande en done",
-                        variant: "destructive",
-                      });
+                    const headers: Record<string, string> = {
+                      "Content-Type": "application/json",
+                      ...(pos_token ? { token: pos_token } : { "x-user-id": userId }),
+                    };
+
+                    const res = await fetch(url, {
+                      method: "POST",
+                      headers,
+                      body: JSON.stringify({ status: "done" }),
+                    });
+
+                    if (res.ok) {
+                      setOrders((prev) =>
+                        prev.map((o) =>
+                          o.id === order.id ? { ...o, status: "done" } : o
+                        )
+                      );
                     }
-                  }}
-                >
-                  {order.pickup_code}
+                  } catch (e) {
+                    toast({
+                      title: "Erreur",
+                      description: "Impossible de passer la commande en done",
+                      variant: "destructive",
+                    });
+                  }
+                }}
+              >
+                <div className="text-5xl font-bold mb-4">{order.pickup_code}</div>
+                <div className="space-y-2 text-lg">
+                  {order.items.map((item, i) => (
+                    <div key={i} className="flex justify-between text-white/90">
+                      <span>{item.item_name} × {item.quantity}</span>
+                      <span>{(item.price * item.quantity).toFixed(2)}$</span>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
+
 
             </div>
 

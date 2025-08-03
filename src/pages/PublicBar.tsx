@@ -105,7 +105,7 @@ const PublicBar = () => {
         if (!res.ok) throw new Error(res.statusText);
         return res.json();
       })
-      .then(data => setPosList(data.points_of_sale))
+      .then(data => {setPosList(data.points_of_sale);console.log("✅ PDV récupérés :", data.points_of_sale)}  )
       .catch(err => console.error('Erreur chargement PDV public:', err));
   }, [barId]);
 
@@ -154,30 +154,29 @@ const PublicBar = () => {
 
     const savedName = localStorage.getItem("client_name");
     const savedPhone = localStorage.getItem("phone_number");
+    setShowPhoneModal(!savedPhone);
+
     const savedId = localStorage.getItem("client_id");
     const lastCmd = localStorage.getItem("last_command");
 
     if (savedName) setClientName(savedName);
-  if (savedPhone) {
-    console.log("📦 Téléphone sauvegardé trouvé :", savedPhone);
-    const match = savedPhone.match(/^(\+(1|33))(\d{9,})$/);
-    if (match) {
-      console.log("✅ Préfixe détecté :", match[1]);
-      console.log("✅ Numéro détecté :", match[3]);
-      setPhonePrefix(match[1]);
-      setPhoneNumber(match[3]);
-    } else {
-      console.warn("⚠️ Format inattendu du numéro :", savedPhone);
-      setPhonePrefix("+1");
-      setPhoneNumber(savedPhone.replace(/\D/g, ""));
-    }
-  }
-
-
     if (savedPhone) {
-      const url = `https://kpsule.app/api/public/bars/${barId}/commands/by-phone?phone=${encodeURIComponent(phoneNumber)}`;
+      const match = savedPhone.match(/^(\+(1|33))(\d{9,})$/);
+      let cleanPhone = "";
+      if (match) {
+        setPhonePrefix(match[1]);
+        setPhoneNumber(match[3]);
+        cleanPhone = match[3];
+      } else {
+        const fallback = savedPhone.replace(/\D/g, "");
+        setPhonePrefix("+1");
+        setPhoneNumber(fallback);
+        cleanPhone = fallback;
+      }
+
+      const url = `https://kpsule.app/api/public/bars/${barId}/commands/by-phone?phone=${cleanPhone}`;
       console.log("📡 Fetch last command URL:", url);
-      console.log("🧾 savedPhone:", savedPhone, " phoneNumber(raw):", phoneNumber);
+      console.log("🧾 savedPhone:", savedPhone, " phoneNumber(raw):", cleanPhone);
 
       fetch(url)
         .then(res => res.json())
@@ -330,18 +329,30 @@ const PublicBar = () => {
       if (clientId) localStorage.setItem("client_id", clientId);
 
   
-      const response = await fetch(`https://kpsule.app/api/bars/${barId}/checkout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_name: clientName,
-          phone: phoneNumber,
-          pos_id: selectedPos,
-          items: orderItems,
+      const selectedPosObj = posList.find(p => p.id === selectedPos);
+      const paymentMode = selectedPosObj?.payment_mode;
+
+      const url = paymentMode === "stripe"
+        ? `https://kpsule.app/api/bars/${barId}/checkout`
+        : `https://kpsule.app/api/public/bars/${barId}/commands`;
+
+      const body = {
+        client_name: clientName,
+        phone: phoneNumber,
+        pos_id: selectedPos,
+        items: orderItems,
+        ...(paymentMode === "stripe" ? {
           total: getTotalPrice(),
           client_id: localStorage.getItem("client_id") || undefined
-        })        
+        } : {})
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
       });
+
   
       if (!response.ok) throw new Error("Erreur création session Stripe");
   
@@ -453,6 +464,14 @@ const PublicBar = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
       <header className="relative h-48 overflow-hidden">
+        {phoneNumber && (
+          <div
+            className="fixed top-4 left-4 z-50 bg-white text-orange-600 px-3 py-1 rounded-lg shadow cursor-pointer text-sm font-semibold"
+            onClick={() => setShowPhoneModal(true)}
+          >
+            📞 {phonePrefix} ({phoneNumber.slice(0,3)}) {phoneNumber.slice(3,6)}-{phoneNumber.slice(6)}
+          </div>
+        )}
         {headerImageUrl ? (
           <img src={headerImageUrl} alt="Header" className="w-full h-full object-cover" />
         ) : (
@@ -477,11 +496,22 @@ const PublicBar = () => {
 
             <input
               type="tel"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value.replace(/\s/g, ""))}
-              placeholder="Numéro (ex: 5144004139)"
+              value={
+                phoneNumber.length <= 2
+                  ? phoneNumber
+                  : phoneNumber.length <= 6
+                  ? `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3)}`
+                  : `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6)}`
+              }
+              onChange={(e) => {
+                const raw = e.target.value.replace(/\D/g, "").slice(0, 10); // max 10 chiffres
+                setPhoneNumber(raw);
+              }}
+              placeholder="(514) 400-4139"
               className="border rounded-md px-4 py-2 w-64"
             />
+
+
           </div>
           <p className="text-sm text-gray-500">
             Format attendu : {phonePrefix === "+1" ? "+1XXXXXXXXXX" : "+33XXXXXXXXX"}

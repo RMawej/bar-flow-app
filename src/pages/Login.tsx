@@ -25,6 +25,7 @@ const Login = () => {
           title: "Connexion réussie",
           description: "Bienvenue dans votre dashboard !",
         });
+        window.location.href = "/dashboard";
       } else {
         toast({
           title: "Erreur de connexion",

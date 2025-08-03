@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { useParams } from "react-router-dom";
 import ItemsModal from "@/components/ItemsModal"; // ajuste le chemin si besoin
+import CreateOrderModal from "@/components/CreateOrderModal";
 
 const BarTender = () => {
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -14,13 +15,16 @@ const BarTender = () => {
   const [digits, setDigits] = useState(["", "", "", ""]);
   const inputsRef = useRef<HTMLInputElement[]>([]);
   const [items, setItems] = useState<any[]>([]);
+  const [barId, setBarId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!pos_id) return;
     fetch(`https://kpsule.app/api/public/pos/${pos_id}`)
       .then(res => res.json())
       .then(data => {
+        console.log("✅ Nom du Point de Vente récupéré :", data);
         if (data?.name) setPosName(data.name);
+        if (data?.bar_id) setBarId(data.bar_id);
       })
       .catch(err => console.error("Erreur récupération nom PdV", err));
   }, [pos_id]);
@@ -157,6 +161,8 @@ const BarTender = () => {
       <h1 className="text-3xl font-bold mb-6 text-orange-700 text-center">
         Point de Vente {posName} – Commandes
       </h1>
+      <CreateOrderModal items={items} barId={barId} posId={pos_id!} token={posToken!} />
+
 
       <div className="flex justify-center gap-4 mb-4">
         <Button variant={filterDone === "all" ? "default" : "outline"} onClick={() => setFilterDone("all")}>

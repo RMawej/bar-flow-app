@@ -6,6 +6,9 @@ import Dashboard from "./Dashboard";
 import PublicBar from "./PublicBar";
 import { useAuthStore } from "@/store/authStore";
 import PublicMap from "./PublicMap";
+import PublicMapMatcha from "./PublicMapMatcha";
+import AdminBars from "./AdminBars";
+
 import Callback from "./callback"; 
 import BarTender from "./BarTender";
 
@@ -32,7 +35,7 @@ const Index = () => {
         <Route path="/callback" element={<Callback />} />
         <Route 
           path="/login" 
-          element={token ? <Navigate to="/dashboard" /> : <Login />} 
+          element={<Login />} 
         />
         <Route 
           path="/dashboard" 
@@ -40,11 +43,12 @@ const Index = () => {
         />
         <Route path="/bartender/:pos_id" element={<BarTender />} />
         <Route path="/bar/:barId" element={<PublicBar />} />
-        <Route 
-          path="/" 
-          element={token ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} 
-        />
         <Route path="/map" element={<PublicMap />} />
+        <Route path="/queen" element={<PublicMapMatcha />} />
+        <Route path="/matcha" element={<PublicMapMatcha />} />
+
+        <Route path="/admin/bars" element={<AdminBars />} />
+        <Route path="*" element={<Navigate to="/map" />} />
 
       </Routes>
     </BrowserRouter>

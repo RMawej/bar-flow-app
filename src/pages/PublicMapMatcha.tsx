@@ -30,7 +30,7 @@ const getCustomIcon = (music, tags) => {
 
 
 const PublicMap = () => {
-  const [bars, setBars] = useState<any[]>([]);
+  const [matchas, setmatchas] = useState<any[]>([]);
   const [filter, setFilter] = useState("all");
 
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -47,7 +47,7 @@ const PublicMap = () => {
   const [searchType, setSearchType] = useState("item"); // "item" ou "music"
   
   useEffect(() => {
-    fetch("https://kpsule.app/api/public/bars/locations", {
+    fetch("https://kpsule.app/api/public/matchas/locations", {
       headers: {}
     })
       .then(res => {
@@ -58,8 +58,8 @@ const PublicMap = () => {
       .catch(err => console.error(err));
     }, []);
 
-  const openItemsModal = async (bar_id) => {
-    const res = await fetch(`https://kpsule.app/api/bars/${bar_id}/items`);
+  const openItemsModal = async (matcha_id) => {
+    const res = await fetch(`https://kpsule.app/api/matchas/${matcha_id}/items`);
     const data = await res.json();
     setModalItems(data.items);
     setShowItemsModal(true);
@@ -68,8 +68,12 @@ const PublicMap = () => {
 
   
 
-  const openPlaylistModal = async (bar_id) => {
-    const res = await fetch(`https://kpsule.app/api/public/bars/${bar_id}/playlist`);
+  const openPlaylistModal = async (matcha_id) => {
+    const res = await fetch(`https://kpsule.app/api/public/matchas/${matcha_id}/playlist`, {
+      headers: {
+        "x-user-id": "PUBLIC", // modifie si besoin
+      },
+    });
     if (res.status === 403) {
       alert("Accès interdit à la playlist");
       return;
@@ -81,13 +85,13 @@ const PublicMap = () => {
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       if (searchTerm.trim()) {
-        const res = await fetch(`https://kpsule.app/api/public/bars/search?${searchType}=${encodeURIComponent(searchTerm)}`);
+        const res = await fetch(`https://kpsule.app/api/public/matchas/search?${searchType}=${encodeURIComponent(searchTerm)}`);
         const data = await res.json();
         setSuggestions(data.results ?? []);
       } else {
-        const res = await fetch("https://kpsule.app/api/public/bars/locations");
+        const res = await fetch("https://kpsule.app/api/public/matchas/locations");
         const data = await res.json();
-        setBars(data.locations ?? []);
+        setmatchas(data.locations ?? []);
         setSuggestions([]);
       }
     }, 300);
@@ -96,50 +100,33 @@ const PublicMap = () => {
   
   
 
-  const filteredBars = bars.filter(
-    bar => filter === "all" || bar.music?.toLowerCase() === filter
+  const filteredmatchas = matchas.filter(
+    matcha => filter === "all" || matcha.music?.toLowerCase() === filter
   );
 
   return (
     <div className="h-screen w-full flex flex-col relative">
       <div className="flex gap-2 flex-wrap relative">
 
-    <select
-        value={searchType}
-        onChange={e => setSearchType(e.target.value)}
-        className="border rounded px-2 py-1"
-      >
-        <option value="item">Item</option>
-        <option value="music">Musique</option>
-      </select>
-
-
-      <input
-        type="text"
-        placeholder={`Rechercher un ${searchType === "item" ? "item" : "titre/artiste"}...`}
-        value={searchTerm}
-        onChange={e => setSearchTerm(e.target.value)}
-        className="border rounded px-2 py-1 flex-1 min-w-[200px]"
-      />
       {suggestions.length > 0 && (
         <div className="absolute bg-white border mt-1 rounded shadow z-50 max-h-60 overflow-auto w-[300px] left-0 top-full">
         {suggestions.map((sug, idx) => 
         {
-          const matchedBar = bars.find(b => b.bar_id === sug.bar_id);
-          const barName = matchedBar?.name || sug.bar_id;
+          const matchedmatcha = matchas.find(b => b.matcha_id === sug.matcha_id);
+          const matchaName = matchedmatcha?.name || sug.matcha_id;
         return (
             <div
               key={idx}
               onClick={() => {
                 console.log("Suggestion cliquée :", sug);
-                const ref = markerRefs.current[sug.bar_id];
+                const ref = markerRefs.current[sug.matcha_id];
                 console.log("Ref récupéré :", ref);
               
                 if (ref && ref.openPopup) {
-                  console.log("Popup ouverte pour le marker :", sug.bar_id);
+                  console.log("Popup ouverte pour le marker :", sug.matcha_id);
                   ref.openPopup(); // ✅ simple, suffisant
                 } else {
-                  console.warn("Aucune ref ou méthode openPopup non disponible pour :", sug.bar_id);
+                  console.warn("Aucune ref ou méthode openPopup non disponible pour :", sug.matcha_id);
                 }
               
                 setSearchTerm("");
@@ -149,7 +136,7 @@ const PublicMap = () => {
               
               className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
             >
-              {sug.match_term} – {barName}
+              {sug.match_term} – {matchaName}
             </div>
           )})}
         </div>
@@ -163,86 +150,72 @@ const PublicMap = () => {
             attribution="&copy; OpenStreetMap contributors"
           />
           
-          {filteredBars.map(bar => (
+          {filteredmatchas.map(matcha => (
             <Marker
-              key={bar.id}
-              position={[bar.lat, bar.lng]}
-              icon={getCustomIcon(bar.music, bar.tags_fr || bar.tags)}
+              key={matcha.id}
+              position={[matcha.lat, matcha.lng]}
+              icon={getCustomIcon(matcha.music, matcha.tags_fr || matcha.tags)}
               ref={(ref) => {
-                if (ref) markerRefs.current[bar.bar_id] = ref;
+                if (ref) markerRefs.current[matcha.matcha_id] = ref;
               }}              
               eventHandlers={{
                 click: () => {
-                  console.log("Marker clicked manually →", bar.id);
+                  console.log("Marker clicked manually →", matcha.id);
                 },
               }}
             >
 
           <Popup>
-            <h2 className="font-bold">{bar.name || "Bar"}</h2>
+            <h2 className="font-bold">{matcha.name || "matcha"}</h2>
 
-            {bar.description_fr || bar.description ? (
+            {matcha.description_fr || matcha.description ? (
               <p className="text-sm italic mb-1">
-                {bar.description_fr || bar.description}
+                {matcha.description_fr || matcha.description}
               </p>
             ) : null}
 
-            {bar.music_fr || bar.music ? (
+            {matcha.music_fr || matcha.music ? (
               <p>🎶 Musique : {
-                Array.isArray(bar.music_fr)
-                  ? bar.music_fr.join(", ")
-                  : Array.isArray(bar.music)
-                  ? bar.music.join(", ")
+                Array.isArray(matcha.music_fr)
+                  ? matcha.music_fr.join(", ")
+                  : Array.isArray(matcha.music)
+                  ? matcha.music.join(", ")
                   : (() => {
                       try {
-                        const parsed = JSON.parse(bar.music || "[]");
+                        const parsed = JSON.parse(matcha.music || "[]");
                         return Array.isArray(parsed) ? parsed.join(", ") : "";
                       } catch {
-                        return bar.music;
+                        return matcha.music;
                       }
                     })()
               }</p>
             ) : null}
 
-            {bar.tags_fr || bar.tags ? (
-              <p>🏷️ Tags : {
-                Array.isArray(bar.tags_fr)
-                  ? bar.tags_fr.join(", ")
-                  : (() => {
-                      try {
-                        const parsed = JSON.parse(bar.tags || "[]");
-                        return Array.isArray(parsed) ? parsed.join(", ") : "";
-                      } catch {
-                        return bar.tags;
-                      }
-                    })()
-              }</p>
-            ) : null}
+          {matcha.tags_fr || matcha.tags ? (
+            <p>🏷️ Tags : {
+              (() => {
+                try {
+                  const tags = JSON.parse(matcha.tags_fr || matcha.tags || "[]");
+                  return Array.isArray(tags) ? tags.join(", ") : "";
+                } catch {
+                  return "";
+                }
+              })()
+            }</p>
+          ) : null}
 
-            {bar.price ? <p>💰 Prix : {bar.price}</p> : null}
 
-            {bar.url && (
+            {matcha.price ? <p>💰 Prix : {matcha.price}</p> : null}
+
+            {matcha.url && (
               <button
                 className="text-blue-600 underline mt-2"
-                onClick={() => window.open(bar.url, "_blank")}
+                onClick={() => window.open(matcha.url, "_blank")}
               >
                 Voir le site
               </button>
             )}
             <br />
-            <button
-              className="text-green-600 underline mt-2"
-              onClick={() => openItemsModal(bar.bar_id)}
-            >
-              Voir les items
-            </button>
-            <br />
-            <button
-              className="text-purple-600 underline mt-1"
-              onClick={() => openPlaylistModal(bar.bar_id)}
-            >
-              Voir les musiques
-            </button>
           </Popup>
 
             </Marker>
@@ -291,7 +264,7 @@ const PublicMap = () => {
             >
               ✕
             </button>
-            <h2 className="text-2xl font-bold mb-4">Playlist du bar</h2>
+            <h2 className="text-2xl font-bold mb-4">Playlist du matcha</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {playlistModal.map(track => (
                 <div key={track.id} className="border rounded shadow p-2 flex flex-col">
