@@ -8,7 +8,7 @@ import { useAuthStore } from "@/store/authStore";
 import PublicMap from "./PublicMap";
 import PublicMapMatcha from "./PublicMapMatcha";
 import AdminBars from "./AdminBars";
-
+import FiddlesDirections from "./Directions";
 import Callback from "./callback"; 
 import BarTender from "./BarTender";
 
@@ -46,6 +46,7 @@ const Index = () => {
         <Route path="/map" element={<PublicMap />} />
         <Route path="/queen" element={<PublicMapMatcha />} />
         <Route path="/matcha" element={<PublicMapMatcha />} />
+        <Route path="/directions" element={<FiddlesDirections />} />
 
         <Route path="/admin/bars" element={<AdminBars />} />
         <Route path="*" element={<Navigate to="/map" />} />

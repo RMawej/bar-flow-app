@@ -159,9 +159,18 @@ const PublicMap = () => {
       <div className="flex-1 z-0">
         <MapContainer center={[45.5088, -73.561]} zoom={13} style={{ height: "100%", width: "100%" }}>
           <TileLayer
+            url="https://tiles.arcgis.com/tiles/cDXczVv5LUqant4Y/arcgis/rest/services/montreal_a_pied/MapServer/tile/{z}/{y}/{x}"
+            attribution="&copy; Ville de Montréal / ArcGIS"
+          />
+          <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap contributors"
           />
+          <TileLayer
+            url="https://tiles.arcgis.com/tiles/cDXczVv5LUqant4Y/arcgis/rest/services/montreal_a_pied/MapServer/tile/{z}/{y}/{x}"
+            attribution="&copy; Ville de Montréal / ArcGIS"
+          />
+
           
           {filteredBars.map(bar => (
             <Marker
