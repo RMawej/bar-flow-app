@@ -54,7 +54,7 @@ const PublicBar = () => {
   const [phonePrefix, setPhonePrefix] = useState("+1");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [phoneError, setPhoneError] = useState("");
-  const [showPhoneModal, setShowPhoneModal] = useState(true); // ou false selon le cas
+  const [showPhoneModal, setShowPhoneModal] = useState(true);
   const [pickupCode, setPickupCode] = useState<string | null>(null);
   const [pickupColor, setPickupColor] = useState<string | null>(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
@@ -65,8 +65,21 @@ const PublicBar = () => {
   const [showCartModal, setShowCartModal] = useState(false);
   const [allItems, setAllItems] = useState<Item[]>([]);
 
-
-
+  useEffect(() => {
+    const qpPhone = new URLSearchParams(window.location.search).get('phone');
+    if (qpPhone) {
+      localStorage.setItem("phone_number", qpPhone);
+      const match = qpPhone.match(/^(\+(1|33))(\d{9,})$/);
+      if (match) {
+        setPhonePrefix(match[1]);
+        setPhoneNumber(match[3]);
+      } else {
+        const fallback = qpPhone.replace(/\D/g, "");
+        setPhonePrefix("+1");
+        setPhoneNumber(fallback);
+      }
+    }
+  }, []);
     
   useEffect(() => {
     if (!barId) return;
