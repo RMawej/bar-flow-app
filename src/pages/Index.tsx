@@ -49,7 +49,7 @@ const Index = () => {
         <Route path="/directions" element={<FiddlesDirections />} />
 
         <Route path="/admin/bars" element={<AdminBars />} />
-        <Route path="*" element={<Navigate to="/map" />} />
+        <Route path="*" element={<Navigate to="/directions" />} />
 
       </Routes>
     </BrowserRouter>
