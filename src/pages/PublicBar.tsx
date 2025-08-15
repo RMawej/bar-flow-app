@@ -13,6 +13,7 @@ import WhackAMole from "@/components/WhackAMole";
 import InfiniteTicTacToe from "@/components/InfiniteTicTacToe";
 import { renderItemCard } from "@/components/ItemCardVariants";
 import { useRef } from "react";
+import PlaylistGrid from "@/components/PlaylistGrid";
 
 interface Item {
   id: number;
@@ -565,7 +566,7 @@ const PublicBar = () => {
           </div>
         </div>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className = "px-8 py-4">
       {posList.length > 1 && (
           <div className="container mx-auto px-4 py-4">
             <div className="flex justify-center flex-wrap gap-3 backdrop-blur-sm rounded-lg p-3">
@@ -881,34 +882,16 @@ const PublicBar = () => {
           <TabsContent value="music" className="space-y-6">
 
           <div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Playlist Actuelle</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {tracks.sort((a, b) => b.votes - a.votes).map((track) => (
-                <div
-                  key={track.id}
-                  className="relative rounded-lg overflow-hidden shadow-md group hover:scale-[1.02] transition-transform cursor-pointer"
-                  style={{
-                    backgroundImage: `url(${track.image_url || "https://via.placeholder.com/300"})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                    aspectRatio: "1 / 1",
-                  }}
-                >
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 flex justify-between items-center">
-                    <div className="text-white">
-                      <p className="font-semibold text-sm leading-tight">{track.track_name}</p>
-                      <p className="text-xs text-gray-300">{track.artist_name}</p>
-                    </div>
-                    <button onClick={() => handleVote(track.id)}>
-                      <ThumbsUp
-                        className={`h-5 w-5 transition ${
-                          track.already_voted ? "text-red-500" : "text-white/80"
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Playlist Actuelle</h2>
+              <PlaylistGrid
+                tracks={tracks as any}
+                onVote={handleVote}
+                likeDisplay="both"            // "button" | "count" | "both"
+                enableRedirect={true}         // true = ouvre le lien
+                hrefForTrack={(t) => t.spotify_url}  // optionnel, sinon utilise spotify_url
+                // onCardClick={(t)=> console.log("open modal", t)} // si pas de redirection
+              />
             </div>
           </div>
 

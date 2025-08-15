@@ -170,51 +170,70 @@ const PublicMap = () => {
           </div>
         )}
       </div>
-
-      {/* Carte */}
-      <div className="flex-1 relative">
-        <MapContainer
-          whenCreated={map => (mapRef.current = map)}
-          center={userPos || [45.5088, -73.561]}
-          zoom={13}
-          style={{ height: "100%", width: "100%" }}
-        >
+      <div className="flex-1 z-0">
+        <MapContainer center={[45.5088, -73.561]} zoom={13} style={{ height: "100%", width: "100%" }}>
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap contributors"
           />
+          
+          {filteredBars.map(bar => (
+            <Marker
+              key={bar.id}
+              position={[bar.lat, bar.lng]}
+              icon={getCustomIcon(bar.music, bar.tags_fr || bar.tags)}
+              ref={(ref) => {
+                if (ref) markerRefs.current[bar.bar_id] = ref;
+              }}              
+              eventHandlers={{
+                click: () => {
+                  console.log("Marker clicked manually →", bar.id);
+                },
+              }}
+            >
 
-          {/* Marqueur utilisateur animé */}
-          {userPos && (
-            <Marker position={userPos} icon={userIcon}>
-              <Popup>Vous êtes ici</Popup>
-            </Marker>
-          )}
+          <Popup>
+            <h2 className="font-bold">{bar.name || "Bar"}</h2>
 
-          {/* Bars avec distance */}
-          {filteredBars.map(bar => {
-            const dist = userPos ? haversine(userPos, [bar.lat, bar.lng]).toFixed(2) : null;
-            return (
-              <Marker
-                key={bar.id}
-                position={[bar.lat, bar.lng]}
-                icon={getCustomIcon(bar.music, bar.tags_fr || bar.tags)}
-                ref={ref => ref && (markerRefs.current[bar.bar_id] = ref)}
-              >
-                <Popup>
-                  <h2 className="font-bold">{bar.name || "Bar"}</h2>
-                  {bar.description_fr || bar.description ? <p className="italic text-sm mb-1">{bar.description_fr || bar.description}</p> : null}
-                  {bar.music_fr || bar.music ? <p>🎶 Musique : {Array.isArray(bar.music_fr) ? bar.music_fr.join(", ") : Array.isArray(bar.music) ? bar.music.join(", ") : JSON.parse(bar.music||"[]").join(", ")}</p> : null}
-                  {bar.tags_fr || bar.tags ? <p>🏷️ Tags : {(Array.isArray(bar.tags_fr)?bar.tags_fr:JSON.parse(bar.tags||"[]")).join(", ")}</p> : null}
-                  {bar.price && <p>💰 Prix : {bar.price}</p>}
-                  {bar.url && <button className="underline text-blue-600 mt-2" onClick={()=>window.open(bar.url,"_blank")}>Voir le site</button>}
-                  <button className="underline text-green-600 mt-2 block" onClick={()=>openItemsModal(bar.bar_id)}>Voir les items</button>
-                  <button className="underline text-purple-600 mt-1 block" onClick={()=>openPlaylistModal(bar.bar_id)}>Voir les musiques</button>
-                  {dist && <p className="mt-1 font-semibold">📍 {dist} km</p>}
-                </Popup>
-              </Marker>
-            );
-          })}
+            {bar.description_fr || bar.description ? (
+              <p className="text-sm italic mb-1">
+                {bar.description_fr || bar.description}
+              </p>
+            ) : null}
+
+            {bar.music_fr || bar.music ? (
+              <p>🎶 Musique : {
+                Array.isArray(bar.music_fr)
+                  ? bar.music_fr.join(", ")
+                  : Array.isArray(bar.music)
+                  ? bar.music.join(", ")
+                  : (() => {
+                      try {
+                        const parsed = JSON.parse(bar.music || "[]");
+                        return Array.isArray(parsed) ? parsed.join(", ") : "";
+                      } catch {
+                        return bar.music;
+                      }
+                    })()
+              }</p>
+            ) : null}
+
+            {bar.tags_fr || bar.tags ? (
+              <p>🏷️ Tags : {
+                Array.isArray(bar.tags_fr)
+                  ? bar.tags_fr.join(", ")
+                  : (() => {
+                      try {
+                        const parsed = JSON.parse(bar.tags || "[]");
+                        return Array.isArray(parsed) ? parsed.join(", ") : "";
+                      } catch {
+                        return bar.tags;
+                      }
+                    })()
+              }</p>
+            ) : null}
+
+            {bar.price ? <p>💰 Prix : {bar.price}</p> : null}
 
           {/* Bouton centrer */}
           <button
