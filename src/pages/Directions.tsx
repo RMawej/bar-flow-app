@@ -174,6 +174,9 @@ export default function FiddlesDirections() {
       return 0;                                      // sinon garder l'ordre actuel
     });
   }, [suggestions, bars]);
+
+  const geolocGrantedRef = useRef(false);
+
   // 1) Geolocation (avec logs)
   useEffect(() => {
     if (!navigator.geolocation) { warn("Geolocation API not available"); return; }
@@ -184,13 +187,15 @@ export default function FiddlesDirections() {
       (p) => {
         const { latitude, longitude, accuracy } = p.coords;
         log("Geolocation: success", { lat: latitude, lng: longitude, accuracy: `${accuracy}m` });
-        setStart([longitude, latitude]); // ⬅️ bien [lng,lat]
+        geolocGrantedRef.current = true;                // ✅ permission accordée
+        setStart([longitude, latitude]);                // bien [lng,lat]
       },
       (e) => warn("Geolocation: denied/fail", e?.code, e?.message),
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
+
 
   // 🔄 Récupération météo Open-Meteo
   useEffect(() => {
@@ -447,16 +452,23 @@ export default function FiddlesDirections() {
   // 4) Recenter après géoloc (seulement une fois)
   const recenterDone = useRef(false);
 
+  // 4) Recenter après géoloc — une seule fois
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady || !start || recenterDone.current) {
+    if (!map || !mapReady || !start) {
       if (!mapReady) warn("Recenter skipped: map not ready");
       return;
     }
-    log("Recenter + move me-marker to", start);
-    meMarkerRef.current?.setLngLat(start); 
-    map.flyTo({ center: start as LngLatLike, zoom: 15.2, pitch: 60, bearing: -18, duration: 600 });
-    recenterDone.current = true; // empêche relance
+    // Unique flyTo seulement si l'utilisateur a accordé la géoloc
+    if (geolocGrantedRef.current && !recenterDone.current) {
+      log("Recenter (unique) + move me-marker to", start);
+      meMarkerRef.current?.setLngLat(start);
+      map.flyTo({ center: start as LngLatLike, zoom: 15.2, pitch: 60, bearing: -18, duration: 600 });
+      recenterDone.current = true;
+    } else {
+      // Si pas de permission, on met juste à jour le marqueur sans fly
+      meMarkerRef.current?.setLngLat(start);
+    }
   }, [start, mapReady]);
 
 
