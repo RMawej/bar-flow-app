@@ -14,6 +14,67 @@ mapboxgl.accessToken =
   import.meta.env.VITE_MAPBOX_TOKEN ||
   'pk.eyJ1Ijoicm1vdWhhd2VqZ3JlbWVhIiwiYSI6ImNtZTM2MW80bTAyNGUyanB6NXdkeXg2MW0ifQ.lprSRRWEUAmh3uiKRjp2PA';
 
+const DAY_LABELS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+// mini composant réutilisable
+function RowPills({ items, icon }: { items: string[]; icon: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflow, setOverflow] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const check = () => { if (ref.current) setOverflow(ref.current.scrollWidth > ref.current.clientWidth); };
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [items, expanded]);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div
+        ref={ref}
+        style={{
+          whiteSpace: expanded ? 'normal' : 'nowrap',
+          overflow: 'hidden',
+          paddingRight: 28
+        }}
+      >
+        {items.map((x, i) => (
+          <span key={i} className="kpsule-pill">{icon} {x}</span>
+        ))}
+      </div>
+
+      {!expanded && overflow && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="kpsule-pill"
+          style={{
+            position: 'absolute', right: 0, top: 0, height: 24, lineHeight: '24px',
+            padding: '0 8px'
+          }}
+          aria-label="Afficher tout"
+          title="Afficher tout"
+        >
+          +
+        </button>
+      )}
+    </div>
+  );
+}
+function normalizeWeek(week: string[] = []) {
+  if (!Array.isArray(week) || week.length !== 7) return week || [];
+  // Si le 1er élément commence par Mon/Lun → tableau Monday-first → on met Sunday en tête
+  const first = (week[0] || '').toLowerCase();
+  const mondayFirst = /^mon|^lun/.test(first);
+  return mondayFirst ? [week[6], ...week.slice(0, 6)] : week;
+}
+
+function stripDayPrefix(line = '') {
+  return line.replace(
+    /^\s*(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat|dimanche|lundi|mardi|mercredi|jeudi|vendredi|samedi|dim|lun|mar|mer|jeu|ven|sam)\s*:?\s*/i,
+    ''
+  );
+}
+
 type Bar = {
   bar_id: string;
   id?: string;
@@ -66,6 +127,17 @@ function parseList(v?: unknown): string[] {
   return [];
 }
 
+
+function getTodayIdxFor(week: string[] | undefined) {
+  const js = new Date().getDay(); // 0=Sun..6=Sat
+  if (!Array.isArray(week) || week.length === 0) return js;
+  const first = (week[0] || '').toLowerCase();
+  const mondayFirst = first.startsWith('mon') || first.startsWith('lun'); // en/fr
+  return mondayFirst ? (js + 6) % 7 : js; // passe en 0=lun..6=dim si besoin
+}
+
+
+
 function iconColorFor(bar: Bar): string {
   const tags = (parseList(bar.tags_fr).length ? parseList(bar.tags_fr) : parseList(bar.tags)).map((t) => t.toLowerCase());
   const music = (parseList(bar.music_fr).length ? parseList(bar.music_fr) : parseList(bar.music))
@@ -90,12 +162,30 @@ export default function FiddlesDirections() {
 
   const [bars, setBars] = useState<Bar[]>([]);
   const [selected, setSelected] = useState<Bar | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [searchType, setSearchType] = useState<'item' | 'music' | 'ambiance'>('ambiance');
   const [searchTerm, setSearchTerm] = useState('');
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedBar, setSelectedBar] = useState<Bar | null>(null);
+  const [nowText, setNowText] = useState(
+    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  );
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setNowText(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    }, 30000);
+    return () => clearInterval(iv);
+  }, []);
+  function toggleFullscreen() {
+    setIsFullscreen((v) => {
+      const next = !v;
+      // Redimensionner la carte après le reflow
+      requestAnimationFrame(() => setTimeout(() => mapRef.current?.resize(), 0));
+      return next;
+    });
+  }
 
   type WeatherNow = {
     temp: number;              // °C
@@ -125,6 +215,15 @@ export default function FiddlesDirections() {
     return "🌡️";
   }
 
+  function setMarkerOutline(marker: mapboxgl.Marker, color?: string) {
+    const el = marker.getElement() as HTMLElement;
+    if (color) {
+      el.style.filter = `drop-shadow(0 0 0 2px ${color}) drop-shadow(0 0 8px ${color})`;
+    } else {
+      el.style.filter = '';
+    }
+  }
+
 
 
   // Modals
@@ -132,6 +231,42 @@ export default function FiddlesDirections() {
   const [showItemsModal, setShowItemsModal] = useState(false);
   const [playlistModal, setPlaylistModal] = useState<any[]>([]);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+
+  /* ⬇️ Nouveau : modal pleine page + onglets */
+  const [showBarModalFS, setShowBarModalFS] = useState(false);
+  const [activeTab, setActiveTab] = useState<'infos'|'musique'|'menu'|'events'>('infos');
+  const [eventsModal, setEventsModal] = useState<any[]>([]);
+  const [fsMenuItems, setFsMenuItems] = useState<any[]>([]);
+
+  const [showAllMusic, setShowAllMusic] = useState(false);
+  const [showAllTags, setShowAllTags] = useState(false);
+
+// APRÈS
+async function openBarFullModal(bar: Bar){
+  setSelectedBar(bar);
+  setActiveTab('infos');
+  setShowBarModalFS(true);
+
+  /* Musique */
+  try {
+    const r = await fetch(`${API}/public/bars/${bar.bar_id}/playlist`);
+    setPlaylistModal(r.ok ? await r.json() : []);
+  } catch { setPlaylistModal([]); }
+
+  /* Événements */
+  try {
+    const r2 = await fetch(`${API}/events?bar_id=${encodeURIComponent(bar.bar_id)}&limit=10`);
+    const j2 = await r2.json();
+    setEventsModal(j2?.events ?? []);
+  } catch { setEventsModal([]); }
+
+  /* Menu (items) pour l’onglet "Menu" */
+  try {
+    const r3 = await fetch(`${API}/bars/${bar.bar_id}/items`);
+    const j3 = await r3.json();
+    setFsMenuItems(j3?.items ?? []);
+  } catch { setFsMenuItems([]); }
+}
 
   // Références markers & popups
   const markerMap = useRef<Record<string, mapboxgl.Marker>>({});
@@ -148,7 +283,7 @@ export default function FiddlesDirections() {
 
     const getOpenMinutes = (bar?: Bar) => {
       if (!bar) return Number.POSITIVE_INFINITY;
-      const today = new Date().getDay();
+      const today = getTodayIdxFor(bar.weekday_text);
       const line = bar.weekday_text?.[today] || '';
       // prend la première heure trouvée (format 24h ou am/pm)
       const m = line.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
@@ -177,23 +312,32 @@ export default function FiddlesDirections() {
 
   const geolocGrantedRef = useRef(false);
 
-  // 1) Geolocation (avec logs)
-  useEffect(() => {
-    if (!navigator.geolocation) { warn("Geolocation API not available"); return; }
-    if (location.protocol !== 'https:') warn("Geolocation may be inaccurate without HTTPS");
 
-    log("Geolocation: watchPosition start (high accuracy)");
-    const watchId = navigator.geolocation.watchPosition(
+
+  const watchIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    // 1) premier fix → déclenchera l'unique fly via l'effet de recentrage
+    navigator.geolocation.getCurrentPosition(
       (p) => {
-        const { latitude, longitude, accuracy } = p.coords;
-        log("Geolocation: success", { lat: latitude, lng: longitude, accuracy: `${accuracy}m` });
-        geolocGrantedRef.current = true;                // ✅ permission accordée
-        setStart([longitude, latitude]);                // bien [lng,lat]
+        geolocGrantedRef.current = true;
+        setStart([p.coords.longitude, p.coords.latitude]);
+        // 2) ensuite on démarre le suivi continu
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          (pp) => {
+            // on MAJ juste le marker pour éviter un nouveau fly
+            meMarkerRef.current?.setLngLat([pp.coords.longitude, pp.coords.latitude]);
+          },
+          (e) => warn("Geolocation watch fail", e?.code, e?.message),
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+        );
       },
-      (e) => warn("Geolocation: denied/fail", e?.code, e?.message),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      (e) => warn("Geolocation first fix fail", e?.code, e?.message),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
-    return () => navigator.geolocation.clearWatch(watchId);
+
+    return () => { if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current); };
   }, []);
 
 
@@ -433,11 +577,7 @@ export default function FiddlesDirections() {
           console.warn('[MAP CLICK] Aucun bar trouvé pour id', id);
         }
       });
-
-
-      log("map.load → mapReady=true; flyTo start");
       setMapReady(true);
-      map.flyTo({ center: start as LngLatLike, zoom: 15.2, pitch: 60, bearing: -18, duration: 600 });
     });
 
 
@@ -489,13 +629,59 @@ export default function FiddlesDirections() {
       margin-right:-50px;              /* ✅ coupe tout débordement horizontal résiduel */
     }
     .kpsule-pop-title{font-weight:900;font-size:16px;margin-bottom:6px;letter-spacing:.2px}
+    /* CTA cliquable pour le nom du bar */
+    .kpsule-pop-title{display:flex;align-items:center;gap:8px}
+    .kpsule-pop-cta{
+      all:unset; cursor:pointer; color:#fff; font-weight:900;
+      padding:6px 10px; border-radius:10px;
+      background:rgba(255,255,255,.06); border:1px solid #22304a;
+      transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+      position:relative; display:inline-flex; align-items:center; gap:6px;
+    }
+    .kpsule-pop-cta::after{
+      content:""; position:absolute; left:8px; right:8px; bottom:4px; height:2px;
+      background:linear-gradient(90deg,#60A5FA,#22D3EE);
+      transform:scaleX(0); transform-origin:left; transition:transform .22s ease;
+      opacity:.9; border-radius:2px;
+    }
+    .kpsule-pop-cta:hover::after, .kpsule-pop-cta:focus-visible::after{ transform:scaleX(1); }
+    .kpsule-pop-cta:hover{ background:rgba(255,255,255,.09); box-shadow:0 6px 20px rgba(0,0,0,.25); }
+    .kpsule-pop-cta:active{ transform:translateY(1px); }
+    .kpsule-pop-cta:focus-visible{ outline:none; box-shadow:0 0 0 2px #60A5FA55, 0 0 0 4px #22304a; }
+
+    /* petite flèche animée */
+    .kpsule-cta-icon{opacity:.7; transition:transform .18s ease, opacity .18s ease}
+    .kpsule-pop-cta:hover .kpsule-cta-icon{ transform:translate(2px,-2px) rotate(10deg); opacity:1; }
+
     .kpsule-pop-desc{
       opacity:.9;font-style:italic;margin-bottom:8px;line-height:1.35;
       overflow-wrap:anywhere;word-break:break-word;hyphens:auto;
       scrollbar-width:none;
     }
     .kpsule-pop-desc::-webkit-scrollbar{display:none}
-    .kpsule-pop-row{display:flex;align-items:flex-start;gap:6px;margin-top:6px;overflow:hidden} /* ✅ pas de débordement */
+    .kpsule-pop-row{display:flex;align-items:flex-start;gap:6px;margin-top:6px;overflow:hidden}
+    .kpsule-hours-wheel{
+      max-height:126px; overflow:hidden;
+      border:1px solid #22304a; border-radius:8px;
+      background:rgba(255,255,255,.06); position:relative;
+      user-select:none; touch-action:none;           /* ✅ empêche le scroll natif qui “vole” le geste */
+      overscroll-behavior: contain;                  /* ✅ évite de faire scroller la page parente */
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 10px, black calc(100% - 10px), transparent 100%);
+              mask-image: linear-gradient(to bottom, transparent 0, black 10px, black calc(100% - 10px), transparent 100%);
+    }
+
+    .kpsule-hours-list{ display:flex; flex-direction:column; will-change:transform; }
+    .kpsule-hours-row{
+      padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.06);
+      display:flex; align-items:center; gap:10px;
+    }
+    .kpsule-day-bullet{ width:8px; height:8px; border-radius:50%; flex:0 0 8px; }
+    .kpsule-day-name{ opacity:.85; min-width:46px; font-weight:700; }
+    .kpsule-hours-list.grabbing{ cursor:grabbing; }
+
+    .kpsule-hours-today{display:flex;align-items:center;gap:8px;margin:6px 0 8px 0;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.06)}
+    .kpsule-hours-dot{width:10px;height:10px;border-radius:50%}
+
     .kpsule-pop-row .scroll-chips{
       display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
       flex:1 1 auto;min-width:0;      /* ✅ autorise la contraction dans la row */
@@ -510,6 +696,25 @@ export default function FiddlesDirections() {
     .kpsule-link.site{color:#60A5FA}
     .kpsule-link.items{color:#22C55E}
     .kpsule-link.playlist{color:#A855F7}
+    /* Modal FS + onglets */
+    .kpsule-fs-wrap{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center}
+    .kpsule-fs{position:relative;width:min(100%,100vw);height:min(100%,100vh);border-radius:0;background:
+      radial-gradient(1400px 800px at 70% -10%, rgba(59,130,246,.20), transparent 60%),
+      radial-gradient(1200px 900px at 30% 110%, rgba(34,197,94,.18), transparent 60%),
+      linear-gradient(180deg,#0b0f1d,#0a0e1c);
+    border:1px solid #1e2a44; box-shadow:0 30px 120px rgba(0,0,0,.6); color:#fff; overflow:hidden}
+    .kpsule-fs-head{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid #182137}
+    .kpsule-fs-title{font-size:20px;font-weight:900;letter-spacing:.2px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .kpsule-fs-tabs{display:flex;gap:8px}
+    .kpsule-tab{padding:8px 12px;border-radius:999px;border:1px solid #22304a;background:rgba(13,18,36,.7);cursor:pointer;opacity:.9}
+    .kpsule-tab[aria-selected="true"]{background:linear-gradient(90deg,#60A5FA,#22D3EE);color:#0b0f1d;border-color:transparent;opacity:1}
+    .kpsule-fs-body{position:absolute;inset:64px 16px 16px 16px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid #1e2a44;overflow:auto;padding:5px}
+    .kpsule-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+    .kpsule-pill{display:inline-block;background:#11182b;border:1px solid #22304a;border-radius:999px;padding:4px 10px;margin:4px 6px 0 0;font-size:12px}
+    .kpsule-kv{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #22304a;border-radius:12px;background:rgba(255,255,255,.04)}
+    .kpsule-close{position:absolute;top:10px;right:12px;font-size:20px;cursor:pointer;border:1px solid #22304a;border-radius:10px;background:rgba(13,18,36,.7);padding:6px 10px}
+    .kpsule-card{border:1px solid #22304a;border-radius:12px;padding:12px;background:rgba(13,18,36,.6)}
+    .kpsule-img{width:100%;height:220px;object-fit:cover;border-radius:12px;border:1px solid #22304a}
     `;
 
     document.head.appendChild(style);
@@ -616,7 +821,6 @@ export default function FiddlesDirections() {
   }
 
   function computeMarkerStyle(bar: Bar, isSelected: boolean, isHighlighted: boolean) {
-    if (isSelected)   return { color: '#EF4444', opacity: 1 }; // sélection = rouge
     if (isHighlighted) return { color: '#FFD700', opacity: 1 }; // résultat = doré
     return { color: baseColorFor(bar), opacity: 1 };
   }
@@ -718,6 +922,7 @@ export default function FiddlesDirections() {
 
           log("Search results (local ambiance):", results.length);
           setSuggestions(results);
+          setShowSuggestions(true);
           return;
         }
 
@@ -727,6 +932,7 @@ export default function FiddlesDirections() {
         const res = await fetch(`${API}/public/bars/search?${qs}`);
         const data = await res.json();
         log("Search results:", data?.results?.length || 0);
+        setShowSuggestions(true);
         setSuggestions(data?.results ?? []);
       } catch (e) {
         err("Search error", e);
@@ -738,33 +944,37 @@ export default function FiddlesDirections() {
 
 
 
-  // APRÈS — affiche TOUTES les infos de l’API
   function openBarPopup(bar: Bar) {
     const map = mapRef.current;
     if (!map) return;
-
+  
     const offsetY = -Math.round(window.innerHeight / 4);
-
     const existing = popupMap.current[bar.bar_id];
+  
     if (existing) {
       existing.addTo(map);
     } else {
+      // 1) Container + contenu de la popin
       const container = document.createElement('div');
       container.style.cssText = 'min-width:240px;max-width:300px;color:#fff';
-
-      const desc = (bar.description_fr || bar.description || '').toString();
+  
+      const desc   = (bar.description_fr || bar.description || '').toString();
       const musics = (Array.isArray(bar.music_fr) && bar.music_fr.length ? bar.music_fr : bar.music || []).filter(Boolean);
       const tags   = (Array.isArray(bar.tags_fr)   && bar.tags_fr.length   ? bar.tags_fr   : bar.tags  || []).filter(Boolean);
       const hours  = Array.isArray(bar.weekday_text) ? bar.weekday_text : [];
-      const today  = new Date().getDay(); // 0=dim … 6=sam
+      const today  = getTodayIdxFor(hours);
       const stars  = (r?: number) => r == null ? '' : '★'.repeat(Math.round(r)) + '☆'.repeat(5 - Math.round(r));
-
-      const coords = `${bar.lat?.toFixed?.(6)}, ${bar.lng?.toFixed?.(6)}`;
-
+  
       container.innerHTML = `
-        <div class="kpsule-pop-title">${bar.name || 'Bar'}</div>
+        <div class="kpsule-pop-title">
+          <button data-action="open-bar-modal"
+                  class="kpsule-pop-cta"
+                  aria-label="Ouvrir la fiche complète">
+            ${bar.name || 'Bar'} <span class="kpsule-cta-icon">↗</span>
+          </button>
+        </div>
         ${desc ? `<div class="kpsule-pop-desc">${desc}</div>` : ''}
-
+  
         ${bar.rating != null || bar.rating_count != null || bar.price ? `
           <div class="kpsule-pop-row" style="width:100%;align-items:center;background:rgba(255,255,255,0.05);padding:6px 8px;border-radius:8px;gap:10px">
             <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
@@ -774,110 +984,239 @@ export default function FiddlesDirections() {
             ${bar.price ? `<span style="font-weight:600;white-space:nowrap">💰 ${bar.price}</span>` : ''}
           </div>` : ''
         }
-
-
+  
         ${bar.phone ? `
           <div class="kpsule-pop-row" style="gap:8px;align-items:center">
             📞 <a data-action="tel" class="kpsule-link" style="color:#93C5FD" href="javascript:void(0)">${bar.phone}</a>
           </div>` : ''
         }
-
+  
         ${hours.length ? `
           <div class="kpsule-pop-row" style="display:block;margin-top:6px">
             <div style="opacity:.9;margin-bottom:4px">🕒 Horaires</div>
-
-            <button data-action="toggle-hours" data-hours-id="hours-${bar.bar_id}"
-                    style="width:100%;display:flex;align-items:center;gap:8px;justify-content:space-between;
-                          background:rgba(255,255,255,.06);border:1px solid #22304a;border-radius:8px;
-                          padding:8px 10px;cursor:pointer;color:#fff">
-              <span style="font-weight:700">${hours[today] || '—'}</span>
-              <span data-caret style="transition:transform .25s ease">▾</span>
-            </button>
-
-            <div id="hours-${bar.bar_id}" class="hours-more"
-                style="max-height:0;overflow:hidden;opacity:0;transition:max-height .25s ease, opacity .25s ease; margin-top:6px">
-              ${hours.map((h,i)=> i===today ? '' : `
-                <div style="display:flex;gap:6px;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,.04);margin-bottom:6px;opacity:.95">
-                  <span>${h}</span>
-                </div>
-              `).join('')}
+  
+            <!-- Bandeau Aujourd’hui -->
+            <div class="kpsule-hours-today" id="hoursToday-${bar.bar_id}">
+              <span class="kpsule-hours-dot" id="hoursDot-${bar.bar_id}"></span>
+              <span id="hoursTodayText-${bar.bar_id}" style="font-weight:700"></span>
             </div>
+  
+            <!-- Carrousel 3 lignes visibles 
+            <div id="hoursWheel-${bar.bar_id}" class="kpsule-hours-wheel">
+              <div id="hoursList-${bar.bar_id}" class="kpsule-hours-list"></div>
+            </div> -->
           </div>` : ''
         }
-
+  
         ${musics.length ? `<div class="kpsule-pop-row"><span>🎶</span><div class="scroll-chips">${musics.map(m=>`<span class="kpsule-chip">${m}</span>`).join('')}</div></div>` : ''}
-        ${tags.length ?   `<div class="kpsule-pop-row"><span>🏷️</span><div class="scroll-chips">${tags.map(t=>`<span class="kpsule-chip">${t}</span>`).join('')}</div></div>`   : ''}
-
+        ${tags.length   ? `<div class="kpsule-pop-row"><span>🏷️</span><div class="scroll-chips">${tags.map(t=>`<span class="kpsule-chip">${t}</span>`).join('')}</div></div>`   : ''}
+  
         ${bar.url ? `
           <div class="kpsule-pop-row" style="align-items:center;gap:8px">
             <a data-action="site" class="kpsule-link site" href="javascript:void(0)" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bar.url}</a>
             <span data-action="gmap" title="Itinéraire Google Maps" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#4285F4">🧭</span>
-          </div>
-        ` : ''}
-
+          </div>` : ''
+        }
+  
         <a data-action="items" class="kpsule-link items" href="javascript:void(0)">Voir les items</a>
         <a data-action="playlist" class="kpsule-link playlist" href="javascript:void(0)">Voir les musiques</a>
       `;
-
-      // Toggle horaires (animation auto en utilisant scrollHeight)
-      container.querySelectorAll('[data-action="toggle-hours"]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.getAttribute('data-hours-id');
-          const panel = container.querySelector('#' + id) as HTMLDivElement | null;
-          const caret = btn.querySelector('[data-caret]') as HTMLElement | null;
-          if (!panel) return;
-
-          const isOpen = panel.style.maxHeight && panel.style.maxHeight !== '0px';
-          if (isOpen) {
-            panel.style.maxHeight = '0px';
-            panel.style.opacity = '0';
-            if (caret) caret.style.transform = 'rotate(0deg)';
+  
+      // 2) Sélecteurs (après injection)
+      const list   = container.querySelector('#hoursList-'  + bar.bar_id) as HTMLDivElement | null;
+      const wheel  = container.querySelector('#hoursWheel-' + bar.bar_id) as HTMLDivElement | null;
+      const dotEl  = container.querySelector('#hoursDot-'   + bar.bar_id) as HTMLDivElement | null;
+      const txtEl  = container.querySelector('#hoursTodayText-' + bar.bar_id) as HTMLSpanElement | null;
+  
+      // 3) Données & helpers pour l’affichage
+      const DAY_LABELS = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+      const days = hours.length === 7 ? hours : Array(7).fill('—');
+      let offset = 0; // décalage cyclique
+      const wrap = (i:number)=> (i%7+7)%7;
+  
+      function colorForDay(idx:number): string {
+        const line = (days[idx] || '').toLowerCase();
+        if (!line || line.includes('closed') || line.includes('fermé')) return '#EF4444'; // rouge
+        if (idx === today) return statusColorFor(bar); // logique du pin pour AUJ
+        return '#F97316'; // futur → ouvre plus tard
+      }
+  
+      function compactHours(line:string): string {
+        const m = line.match(/(\d{1,2}[:.]?\d{0,2}\s?(?:am|pm|[hH])?).*?(\d{1,2}[:.]?\d{0,2}\s?(?:am|pm|[hH])?)/i);
+        if (!m) return line || '—';
+        const fmt = (t:string)=> t.replace(/\s?h/i,'h').replace(/\s+/g,'').toLowerCase();
+        return `${fmt(m[1])} – ${fmt(m[2])}`;
+      }
+  
+      // Bandeau "Aujourd'hui"
+      const todayColor = statusColorFor(bar);
+      if (dotEl) dotEl.style.background = todayColor;
+      if (txtEl) {
+        const todayText = compactHours(days[today] || '');
+        txtEl.textContent = `Aujourd’hui · ${todayText || '—'}`;
+      }
+  
+      // 4) Scroll “site web”: inertie + snap (sans boutons)
+      let ROW = 0;                // hauteur d'une ligne (auto)
+      let visualShift = 0;        // décalage visuel pendant drag/inertie
+      let rafId: number | null = null;
+  
+      function ensureRowHeight(){
+        if (!list) return;
+        const first = list.querySelector('.kpsule-hours-row') as HTMLElement | null;
+        if (first) ROW = first.getBoundingClientRect().height || 42;
+      }
+      function applyTransform(y:number){ if (list) list.style.transform = `translateY(${y}px)`; }
+      function cancelAnim(){ if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; } }
+  
+      function step(n:number){
+        offset += n;
+        // bouclage pour rester raisonnable (optionnel)
+        offset = wrap(offset);
+      }
+  
+      function redraw(){
+        if (!list) return;
+        list.innerHTML = [0,1,2].map(k => {
+          const absIdx = wrap(today + offset + k);
+          const color  = colorForDay(absIdx);
+          const label  = DAY_LABELS[absIdx] || '';
+          const text   = compactHours(days[absIdx] || '—');
+          return `
+            <div class="kpsule-hours-row">
+              <span class="kpsule-day-bullet" style="background:${color}"></span>
+              <span class="kpsule-day-name" style="color:${color}">${label}</span>
+              <span style="opacity:.92">${text}</span>
+            </div>
+          `;
+        }).join('');
+        ensureRowHeight();
+      }
+      redraw();
+  
+      // Wheel desktop (proportionnel + snap court)
+      let wheelAccum = 0;
+      wheel?.addEventListener('wheel', (e:any)=>{
+        e.preventDefault();
+        ensureRowHeight();
+        wheelAccum += e.deltaY; // le trackpad apporte déjà une inertie naturelle
+        const steps = Math.trunc(wheelAccum / (ROW || 40));
+        if (steps){
+          step(steps);
+          wheelAccum -= steps * (ROW || 40);
+          if (list){ list.classList.remove('grabbing'); list.style.transition='transform .12s ease-out'; }
+          applyTransform(0);
+          setTimeout(()=>{ if(list) list.style.transition=''; }, 120);
+          redraw();
+        }
+      }, { passive:false });
+  
+      // Drag (touch + souris) → momentum + snap
+      let dragging = false;
+      let y0 = 0, y = 0;
+      let lastT = 0, lastY = 0;
+      let velocity = 0; // px/ms
+  
+      const onStart = (clientY:number) => {
+        cancelAnim();
+        dragging = true;
+        y0 = y = clientY;
+        lastY = y; lastT = performance.now();
+        velocity = 0;
+        if (list){ list.style.transition=''; list.classList.add('grabbing'); }
+      };
+      const onMove = (clientY:number) => {
+        if (!dragging) return;
+        y = clientY;
+        const dy = y - y0; // bas = positif
+        visualShift = dy;
+        applyTransform(visualShift);
+  
+        const now = performance.now();
+        const dt  = Math.max(1, now - lastT);
+        velocity  = (y - lastY) / dt;
+        lastY = y; lastT = now;
+      };
+      const onEnd = () => {
+        if (!dragging) return;
+        dragging = false;
+        list?.classList.remove('grabbing');
+  
+        // inertie
+        const DECAY = 0.0019;   // friction (↑ = stop + court)
+        const MAX_MS = 550;     // limite durée inertie
+        const startT = performance.now();
+        const startV = velocity; // px/ms
+        let lastOffset = visualShift;
+  
+        const tick = () => {
+          const t = performance.now() - startT;
+          const v = startV * Math.max(0, 1 - (t * DECAY));
+          const ds = v * 16.7; // ~ 1 frame
+          lastOffset += ds;
+          applyTransform(lastOffset);
+  
+          if (t < MAX_MS && Math.abs(v) > 0.01) {
+            rafId = requestAnimationFrame(tick);
           } else {
-            panel.style.maxHeight = panel.scrollHeight + 'px';
-            panel.style.opacity = '1';
-            if (caret) caret.style.transform = 'rotate(180deg)';
+            const steps = Math.round(lastOffset / (ROW || 40)) * -1; // swipe up = jours +
+            if (steps) { step(steps); redraw(); }
+            if (list) list.style.transition = 'transform .14s cubic-bezier(.2,.8,.2,1)';
+            visualShift = 0;
+            applyTransform(0);
+            setTimeout(()=>{ if(list) list.style.transition=''; }, 150);
+            rafId = null;
           }
-        });
+        };
+        tick();
+      };
+  
+      // Touch
+      wheel?.addEventListener('touchstart', (e:any)=> onStart(e.touches[0].clientY), {passive:true});
+      wheel?.addEventListener('touchmove',  (e:any)=> onMove(e.touches[0].clientY),  {passive:true});
+      wheel?.addEventListener('touchend',   onEnd,                                   {passive:true});
+  
+      // Mouse (pointer) — drag vertical
+      wheel?.addEventListener('pointerdown', (e:any)=>{
+        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        onStart(e.clientY);
       });
-
-
+      wheel?.addEventListener('pointermove', (e:any)=> onMove(e.clientY));
+      wheel?.addEventListener('pointerup',   onEnd);
+      wheel?.addEventListener('pointercancel', onEnd);
+  
+      // Actions
       container.addEventListener('click', async (e: any) => {
         const action = e?.target?.getAttribute?.('data-action');
         if (!action) return;
         if (action === 'site' && bar.url) window.open(bar.url, '_blank');
+        if (action === 'open-bar-modal') { openBarFullModal(bar); return; }
         if (action === 'gmap') {
           const gmUrl = `https://www.google.com/maps/dir/?api=1&destination=${bar.lat},${bar.lng}&travelmode=transit`;
           window.open(gmUrl, '_blank');
         }
         if (action === 'tel' && bar.phone) window.open(`tel:${bar.phone.replace(/\s|\(|\)|-/g,'')}`);
-        if (action === 'copy-coords') {
-          try {
-            await navigator.clipboard.writeText(`${bar.lat},${bar.lng}`);
-            (e.target as HTMLElement).textContent = 'Copié ✓';
-            setTimeout(() => ((e.target as HTMLElement).textContent = 'Copier'), 1200);
-          } catch {}
-        }
         if (action === 'items') openItemsModal(bar.bar_id);
         if (action === 'playlist') openPlaylistModal(bar.bar_id);
       });
-
-      const popup = new mapboxgl.Popup({ offset: 16, closeButton: true, className: 'kpsule-popup' })
+  
+      // 5) Création de la popup
+      const popup = new mapboxgl.Popup({
+        offset: 16,
+        closeButton: true,
+        className: 'kpsule-popup',
+        keepInView: true,
+        maxWidth: '320px',
+      })
         .setDOMContent(container)
         .setLngLat([bar.lng, bar.lat])
         .addTo(map);
-      popup.on('close', () => {
-        setSelected(null);
-        requestAnimationFrame(() => {
-          Object.values(markerMap.current).forEach(({ marker, bar }: any) => {
-            const { color } = computeMarkerStyle(bar, false, false);
-            marker.getElement().style.display = '';
-            applyMarkerStyle(marker, color, 1);
-          });
-        });
-      });
+  
+      popup.on('close', () => setSelected(null));
       popupMap.current[bar.bar_id] = popup;
     }
-
+  
+    // Focus carte
     map.flyTo({
       center: [bar.lng, bar.lat],
       zoom: 16.2,
@@ -886,16 +1225,17 @@ export default function FiddlesDirections() {
       duration: 600,
       offset: [0, offsetY],
     });
-
+  
     setSelected(bar);
   }
+  
 
 
   function statusColorFor(bar: Bar): string {
     if (!Array.isArray(bar.weekday_text) || bar.weekday_text.length === 0) return '#999999';
 
     // Jour actuel (0=dimanche … 6=samedi)
-    const todayIdx = new Date().getDay();
+    const todayIdx = getTodayIdxFor(bar.weekday_text);
     const todayStr = bar.weekday_text[todayIdx] || '';
     const lower = todayStr.toLowerCase();
 
@@ -947,10 +1287,10 @@ export default function FiddlesDirections() {
   function openStatus(bar: Bar): { color: string; label: string } {
     const color = statusColorFor(bar); // garde ta logique existante
     // Jour courant
-    const todayStr = (bar.weekday_text?.[new Date().getDay()] || '').toLowerCase();
+    const idx = getTodayIdxFor(bar.weekday_text);
+    const todayStr = (bar.weekday_text?.[idx] || '').toLowerCase();
+    const m = (bar.weekday_text?.[idx] || '').match(/.../i);
 
-    // Heures “HH:MM … HH:MM” si dispo
-    const m = (bar.weekday_text?.[new Date().getDay()] || '').match(/(\d{1,2}[:.]?\d{0,2}\s?(?:am|pm|[hH])?).*?(\d{1,2}[:.]?\d{0,2}\s?(?:am|pm|[hH])?)/i);
     const fmt = (t?: string) => (t || '').replace(/\s?h/i, 'h'); // 7h/19h style fr
 
     let label = 'Fermé aujourd’hui';
@@ -1077,7 +1417,9 @@ export default function FiddlesDirections() {
     <div
       style={{
         position: 'relative',
-        height: '100vh',
+        minHeight: '100dvh',
+        height: '100%',
+        WebkitFillAvailable: 'height',
         background: 'linear-gradient(160deg,#0b0f1d 0%,#0a0c18 60%,#0b1020 100%)',
       }}
     >
@@ -1096,7 +1438,8 @@ export default function FiddlesDirections() {
 
       {/* Titre */}
       <div style={{ position: 'absolute', top: 12, left: 0, right: 0, textAlign: 'center', color: '#fff' }}>
-        <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 0.2 }}>Assa trouve ton spot ce soir</div>
+      {!isFullscreen && (
+        <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 0.2 }}>Assa trouve ton spot ce soir</div>)}
         <div
           style={{
             width: '40%',
@@ -1111,19 +1454,19 @@ export default function FiddlesDirections() {
 
             {/* Barre de recherche flottante - mobile friendly */}
             <div
-        style={{
-          position: 'absolute',
-          top: 64,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '94%',
-          maxWidth: 780,
-          display: 'flex',
-          flexDirection: window.innerWidth < 640 ? 'column' : 'row', 
-          gap: 8,
-          zIndex: 10,
-          padding: '0 10px'
-        }}
+              style={{
+                position: 'absolute',
+                top: isFullscreen ? 12 : 64,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '94%',
+                maxWidth: 780,
+                display: 'flex',
+                flexDirection: window.innerWidth < 640 ? 'column' : 'row',
+                gap: 8,
+                zIndex: 10,
+                padding: '0 10px'
+              }}
             >
         <select
           value={searchType}
@@ -1177,7 +1520,7 @@ export default function FiddlesDirections() {
                   border: '1px solid #22304a',
                   borderRadius: 12,
                   overflow: 'auto',
-                  maxHeight: 260,
+                  maxHeight: 130,
                   zIndex: 20,
                   boxShadow: '0 8px 24px rgba(0,0,0,.45)',
                 }}
@@ -1221,17 +1564,18 @@ export default function FiddlesDirections() {
 
       {/* conteneur carte */}
       <div
-        ref={containerRef}
-        style={{
-          position: 'absolute',
-          inset: '112px 16px 120px 16px',
-          borderRadius: 24,
-          overflow: 'hidden',
-          boxShadow: '0 14px 60px rgba(0,0,0,.45), inset 0 0 0 1px #182137',
-        }}
-      />
+          ref={containerRef}
+          style={{
+            position: 'absolute',
+            inset: isFullscreen ? '0' : '112px 16px 120px 16px',
+            borderRadius: isFullscreen ? 0 : 24,
+            overflow: 'hidden',
+            boxShadow: isFullscreen ? 'none' : '0 14px 60px rgba(0,0,0,.45), inset 0 0 0 1px #182137',
+            zIndex: 1,
+          }}
+        />
 
-      {/* bouton Resume */}
+      {/* bouton Resume
       <button
         onClick={() => {
           if (!mapRef.current || !selected) return;
@@ -1261,35 +1605,87 @@ export default function FiddlesDirections() {
         }}
       >
         <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#22D3EE' }} />
-      </button>
+      </button> */}
 
       {/* panneau bas */}
-    <div
+      {!isFullscreen && (
+          <div
+            style={{
+              position: 'absolute',
+              left: 12,
+              right: 12,
+              bottom: 12,
+              height: 96,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 8,
+              padding: '4px 8px',
+              color: '#fff',
+              borderRadius: 18,
+              background: 'linear-gradient(180deg, rgba(12,16,30,.85), rgba(10,14,26,.85))',
+              border: '1px solid #1e2a44',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 10px 28px rgba(0,0,0,.45)',
+            }}
+          >
+            {/* Gauche : Météo + Heure */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px', borderRadius: 12,
+                  background: 'rgba(13,18,36,.7)', border: '1px solid #22304a'
+                }}
+                title="Météo actuelle"
+              >
+                <span style={{ fontSize: 18 }}>
+                  {weather ? weatherIcon(weather.code, weather.isDay === false) : '🌡️'}
+                </span>
+                <span style={{ opacity: .95 }}>
+                  {weather?.temp != null ? `${Math.round(weather.temp)}°C` : '—'}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  padding: '8px 10px', borderRadius: 12,
+                  background: 'rgba(13,18,36,.7)', border: '1px solid #22304a',
+                  fontVariantNumeric: 'tabular-nums'
+                }}
+                title="Heure locale"
+              >
+                🕒 {nowText}
+              </div>
+            </div>
+
+            {/* Droite : Évènements */}
+            <div className="flex justify-center items-center">
+              <EventsFloatingButton />
+            </div>
+          </div>
+        )}
+
+    <button
+      onClick={toggleFullscreen}
+      aria-label={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
       style={{
         position: 'absolute',
-        left: 12,
+        top: 12,
         right: 12,
-        bottom: 12,
-        height: 96,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: 4,
-        padding: '4px 4px',
+        zIndex: 20,
+        padding: '10px 12px',
         color: '#fff',
-        borderRadius: 18,
-        background: 'linear-gradient(180deg, rgba(12,16,30,.85), rgba(10,14,26,.85))',
-        border: '1px solid #1e2a44',
-        backdropFilter: 'blur(10px)',
-        boxShadow: '0 10px 28px rgba(0,0,0,.45)',
+        background: 'rgba(13,18,36,.7)',
+        border: '1px solid #22304a',
+        borderRadius: 12,
+        backdropFilter: 'blur(8px)',
+        boxShadow: '0 6px 20px rgba(0,0,0,.35)',
+        cursor: 'pointer'
       }}
     >
-
-          <div className="flex justify-center items-center">
-            <EventsFloatingButton />
-          </div>
-    </div>
-
+      {isFullscreen ? '⤢' : '⤢'}
+    </button>
 
       {/* Modal Items */}
       {showItemsModal && (
@@ -1442,6 +1838,213 @@ export default function FiddlesDirections() {
           </div>
         </div>
       )}
+
+      {/* ⬇️ Nouveau : Modal FULL SCREEN Bar */}
+      {showBarModalFS && selectedBar && (
+        <div
+          className="kpsule-fs-wrap"
+          onClick={(e)=>{ if(e.target===e.currentTarget) setShowBarModalFS(false); }}
+        >
+          <div className="kpsule-fs">
+            <button className="kpsule-close" onClick={()=>setShowBarModalFS(false)}>✕</button>
+
+            {/* Header + Tabs */}
+            <div className="kpsule-fs-head">
+              <div className="kpsule-fs-tabs" role="tablist" aria-label="Bar details">
+                {(['infos','musique','menu','events'] as const).map(t=>(
+                  <button
+                    key={t}
+                    className="kpsule-tab"
+                    role="tab"
+                    aria-selected={activeTab===t}
+                    onClick={()=>setActiveTab(t)}
+                  >
+                    {t==='infos'?'Infos':t==='musique'?'Musique':t==='menu'?'Menu':'Évènements'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="kpsule-fs-body">
+                  <div>
+                    <div style={{opacity:1,fontWeight:900, textAlign: "center",padding:8,fontSize:22}}>
+                      {(selectedBar.bar_name || selectedBar.name) || '—'}
+                    </div>
+                  </div>
+              {/* INFOS */}
+              {activeTab==='infos' && (
+
+                <div className="kpsule-grid">
+
+                  <div className="kpsule-card">
+                    <div style={{fontWeight:800,marginBottom:6}}>Description</div>
+                    <div style={{opacity:.92}}>
+                      {(selectedBar.description_fr || selectedBar.description) || '—'}
+                    </div>
+                  </div>
+
+                  <div className="kpsule-card">
+                    <div style={{fontWeight:800,marginBottom:6}}>Contacts</div>
+                    <div className="kpsule-kv">📞 {selectedBar.phone || '—'}</div>
+                    <div className="kpsule-kv">
+                      🔗 {selectedBar.url ? (
+                        <a href={selectedBar.url} target="_blank" style={{color:'#93C5FD'}}>{selectedBar.url}</a>
+                      ) : '—'}
+                    </div>
+                    <div className="kpsule-kv">
+                      ⭐ {selectedBar.rating != null ? `${selectedBar.rating.toFixed(1)} (${selectedBar.rating_count ?? 0})` : '—'}
+                    </div>
+                    <div className="kpsule-kv">💰 {selectedBar.price ?? '—'}</div>
+                  </div>
+
+                  <div className="kpsule-card">
+                    <div style={{ fontWeight: 800, marginBottom: 6 }}>Ambiance</div>
+
+                    <RowPills
+                      icon="🎶"
+                      items={
+                        (parseList(selectedBar.music_fr).length
+                          ? parseList(selectedBar.music_fr)
+                          : parseList(selectedBar.music))
+                      }
+                    />
+
+                    <div style={{ marginTop: 8 }}>
+                      <RowPills
+                        icon="🏷️"
+                        items={
+                          (parseList(selectedBar.tags_fr).length
+                            ? parseList(selectedBar.tags_fr)
+                            : parseList(selectedBar.tags))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="kpsule-card" style={{gridColumn:'1/-1'}}>
+                    <div style={{fontWeight:800,marginBottom:6}}>Horaires</div>
+                    {(() => {
+                      const week = normalizeWeek(selectedBar.weekday_text || []);
+                      const isClosed = (line: string) =>
+                        !line ||
+                        /ferm[ée]|closed|close/i.test(line.trim());
+
+                      return (
+                        <ul style={{listStyle:'none', margin:0, padding:0}}>
+                          {week.map((ln, idx) => {
+                            const text = stripDayPrefix(ln || '').trim();
+                            const closed = isClosed(text);
+                            const color = closed ? '#EF4444' : '#22C55E';
+                            return (
+                              <li key={idx}
+                                  style={{
+                                    display:'flex',
+                                    justifyContent:'space-between',
+                                    gap:12,
+                                    padding:'8px 10px',
+                                    borderBottom:'1px solid rgba(255,255,255,.06)',
+                                    color
+                                  }}>
+                                <span style={{opacity:.9, minWidth:46, fontWeight:700}}>
+                                  {DAY_LABELS_FR[idx]}
+                                </span>
+                                <span style={{opacity:.95}}>
+                                  {text || '—'}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      );
+                    })()}
+                  </div>
+
+
+                  {/* Bouton Google Maps (extrait de l’ancienne case Itinéraire) */}
+                  <div style={{gridColumn:'1/-1',textAlign:'center',marginTop:12}}>
+                    <button
+                      onClick={()=>window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedBar.lat},${selectedBar.lng}&travelmode=transit`,'_blank')}
+                      style={{padding:'10px 12px',borderRadius:10,border:'1px solid #22304a',background:'linear-gradient(90deg,#60A5FA,#22D3EE)',color:'#0b0f1d',fontWeight:800}}
+                    >
+                      Ouvrir dans Google Maps 🧭
+                    </button>
+                  </div>
+                </div>
+              )}
+
+
+              {/* MUSIQUE */}
+              {activeTab==='musique' && (
+                <div>
+                  {Array.isArray(playlistModal) && playlistModal.length>0 ? (
+                    <div className="px-1">
+                      <PlaylistGrid
+                        tracks={playlistModal as any}
+                        onVote={()=>{}}
+                        likeDisplay="both"
+                        enableRedirect={true}
+                        hrefForTrack={(t)=>t.spotify_url}
+                      />
+                    </div>
+                  ) : (
+                    <div className="kpsule-card" style={{textAlign:'center',opacity:.9}}>
+                      🎵 Aucune playlist publique
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* MENU (remplace l'ancien onglet “carte”) */}
+              {activeTab==='menu' && (
+                <div className="kpsule-grid" style={{gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))'}}>
+                  {Array.isArray(fsMenuItems) && fsMenuItems.length>0 ? (
+                    fsMenuItems.map((item:any)=>(
+                      <div key={item.id} className="kpsule-card">
+                        {item.image_url && (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="kpsule-img"
+                            style={{height:160,marginBottom:8}}
+                          />
+                        )}
+                        <div style={{fontWeight:800,marginBottom:4}}>{item.name}</div>
+                        {item.description && <div style={{opacity:.9,marginBottom:6}}>{item.description}</div>}
+                        {item.price!=null && <div style={{color:'#22C55E',fontWeight:800}}>{item.price} $</div>}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="kpsule-card" style={{textAlign:'center',opacity:.9}}>
+                      🛒 Aucune carte publiée pour le moment.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ÉVÈNEMENTS */}
+              {activeTab==='events' && (
+                <div className="kpsule-grid">
+                  {Array.isArray(eventsModal) && eventsModal.length>0 ? eventsModal.map((ev:any)=>(
+                    <div key={ev.id||ev.slug} className="kpsule-card">
+                      {ev.image_url && <img src={ev.image_url} alt={ev.name} className="kpsule-img" style={{height:160,marginBottom:8}}/>}
+                      <div style={{fontWeight:800,marginBottom:4}}>{ev.name}</div>
+                      <div style={{opacity:.9,marginBottom:6}}>
+                        {ev.local_date || ev.date || 'Date à venir'} {ev.local_time ? `· ${ev.local_time}` : ''}
+                      </div>
+                      {ev.venue?.name && <div style={{opacity:.85}}>📍 {ev.venue.name}</div>}
+                      {ev.url && <a href={ev.url} target="_blank" style={{display:'inline-block',marginTop:8,color:'#93C5FD'}}>Voir l’évènement ↗</a>}
+                    </div>
+                  )) : (
+                    <div className="kpsule-card" style={{textAlign:'center',opacity:.9}}>Aucun évènement à venir.</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
