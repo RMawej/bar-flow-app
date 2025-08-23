@@ -3,13 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStore } from "@/store/authStore";
-import { Music, LogOut, Package, ShoppingCart, Upload } from "lucide-react";
+import { Music, LogOut, Package, ShoppingCart, CalendarDays } from "lucide-react";
 import ItemsManager from "@/components/ItemsManager";
 import OrdersListAdmin from "@/components/OrdersListAdmin";
 import PlaylistManager from "@/components/PlaylistManager";
-import MenuScanner from "@/components/MenuScanner";
 import QRCode from "react-qr-code";
 import SettingsForm from "@/components/SettingsForm";
+import EventsManager from "@/components/EventsManager";
+
 
 const Dashboard = () => {
   const { logout, barId, userId } = useAuthStore();
@@ -351,20 +352,24 @@ const Dashboard = () => {
 
 
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 bg-white/60 backdrop-blur-sm">
-            <TabsTrigger value="items"><Package className="h-4 w-4" />Menu</TabsTrigger>
-            <TabsTrigger value="orders"><ShoppingCart className="h-4 w-4" />Commandes</TabsTrigger>
-            <TabsTrigger value="playlist"><Music className="h-4 w-4" />Playlist</TabsTrigger>
-            <TabsTrigger value="settings">Paramètres</TabsTrigger>
-          </TabsList>
-          <TabsContent value="items"><ItemsManager /></TabsContent>
-          <TabsContent value="orders"><OrdersListAdmin /></TabsContent>
-          <TabsContent value="playlist"><PlaylistManager /></TabsContent>
-          <TabsContent value="settings">
-            <SettingsForm />
-          </TabsContent>
-        </Tabs>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5 bg-white/60 backdrop-blur-sm">
+          <TabsTrigger value="items"><Package className="h-4 w-4" />Menu</TabsTrigger>
+          <TabsTrigger value="orders"><ShoppingCart className="h-4 w-4" />Commandes</TabsTrigger>
+          <TabsTrigger value="playlist"><Music className="h-4 w-4" />Playlist</TabsTrigger>
+          <TabsTrigger value="events"><CalendarDays className="h-4 w-4" />Événements</TabsTrigger>
+          <TabsTrigger value="settings">Paramètres</TabsTrigger>
+        </TabsList>
+        <TabsContent value="items"><ItemsManager /></TabsContent>
+        <TabsContent value="orders"><OrdersListAdmin /></TabsContent>
+        <TabsContent value="playlist"><PlaylistManager /></TabsContent>
+        <TabsContent value="events">
+          <EventsManager />
+        </TabsContent>
+        <TabsContent value="settings">
+          <SettingsForm />
+        </TabsContent>
+      </Tabs>
       </main>
     </div>
   );

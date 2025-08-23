@@ -154,6 +154,7 @@ export default function FiddlesDirections() {
   const mapRef = useRef<Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const meMarkerRef = useRef<mapboxgl.Marker | null>(null); // ⬅️ tout en haut du composant
+  const [barFilter, setBarFilter] = useState<'all' | 'open' | 'open_or_soon'>('all');
 
   const [start, setStart] = useState<[number, number]>([-73.5673, 45.5017]); // centre MTL (fallback)
   const [durationText, setDurationText] = useState('—');
@@ -223,6 +224,42 @@ export default function FiddlesDirections() {
       el.style.filter = '';
     }
   }
+
+  // Création des markers avec pin natif
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || !bars.length) return;
+
+    // Supprimer anciens markers
+    Object.values(markerMap.current).forEach(({ marker }: any) => marker.remove());
+    markerMap.current = {};
+
+    // Filtrage
+    const filteredBars = bars.filter(bar => {
+      const color = statusColorFor(bar);
+      if (barFilter === 'all') return true;
+      if (barFilter === 'open') return color === '#22C55E';
+      if (barFilter === 'open_or_soon') return ['#22C55E','#F97316'].includes(color);
+      return true;
+    });
+
+    filteredBars.forEach((bar) => {
+        const { color, opacity } = computeMarkerStyle(bar, false, false);
+        const marker = new mapboxgl.Marker({ color })
+          .setLngLat([bar.lng, bar.lat])
+          .addTo(mapRef.current!);
+        applyMarkerStyle(marker, color, opacity);
+
+        marker.getElement().style.cursor = 'pointer';
+        marker.getElement().addEventListener('click', (e) => {
+          e.stopPropagation();
+          openBarPopup(bar);
+        });
+
+        markerMap.current[bar.bar_id] = { marker, bar };
+      });
+    }, [mapReady, bars, barFilter]);
+    
+
 
 
 
@@ -696,19 +733,52 @@ async function openBarFullModal(bar: Bar){
     .kpsule-link.site{color:#60A5FA}
     .kpsule-link.items{color:#22C55E}
     .kpsule-link.playlist{color:#A855F7}
-    /* Modal FS + onglets */
-    .kpsule-fs-wrap{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center}
-    .kpsule-fs{position:relative;width:min(100%,100vw);height:min(100%,100vh);border-radius:0;background:
-      radial-gradient(1400px 800px at 70% -10%, rgba(59,130,246,.20), transparent 60%),
-      radial-gradient(1200px 900px at 30% 110%, rgba(34,197,94,.18), transparent 60%),
-      linear-gradient(180deg,#0b0f1d,#0a0e1c);
+    .kpsule-fs-wrap {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;        /* ✅ empêche tout scroll */
+    }
+    .kpsule-fs {
+      position: relative;
+      width: 100vw;            /* ✅ prend tout l’écran */
+      height: 100vh;
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 0;
+      background:
+        radial-gradient(1400px 800px at 70% -10%, rgba(59,130,246,.20), transparent 60%),
+        radial-gradient(1200px 900px at 30% 110%, rgba(34,197,94,.18), transparent 60%),
+        linear-gradient(180deg,#0b0f1d,#0a0e1c);
+      border: 1px solid #1e2a44;
+      box-shadow: 0 30px 120px rgba(0,0,0,.6);
+      color: #fff;
+      overflow: hidden;        /* ✅ pas de scroll interne */
+      display: flex;
+      flex-direction: column;
+    }
     border:1px solid #1e2a44; box-shadow:0 30px 120px rgba(0,0,0,.6); color:#fff; overflow:hidden}
     .kpsule-fs-head{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid #182137}
     .kpsule-fs-title{font-size:20px;font-weight:900;letter-spacing:.2px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .kpsule-fs-tabs{display:flex;gap:8px}
+    .kpsule-fs-tabs {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+      justify-content: space-evenly;
+    }
     .kpsule-tab{padding:8px 12px;border-radius:999px;border:1px solid #22304a;background:rgba(13,18,36,.7);cursor:pointer;opacity:.9}
     .kpsule-tab[aria-selected="true"]{background:linear-gradient(90deg,#60A5FA,#22D3EE);color:#0b0f1d;border-color:transparent;opacity:1}
-    .kpsule-fs-body{position:absolute;inset:64px 16px 16px 16px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid #1e2a44;overflow:auto;padding:5px}
+    .kpsule-fs-body {
+      flex: 1;                 /* ✅ prend tout l’espace restant */
+      overflow-y: auto;        /* ✅ uniquement vertical, pas horizontal */
+      overflow-x: hidden;
+      padding: 12px;
+    }
     .kpsule-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
     .kpsule-pill{display:inline-block;background:#11182b;border:1px solid #22304a;border-radius:999px;padding:4px 10px;margin:4px 6px 0 0;font-size:12px}
     .kpsule-kv{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #22304a;border-radius:12px;background:rgba(255,255,255,.04)}
@@ -1468,7 +1538,7 @@ async function openBarFullModal(bar: Bar){
                 padding: '0 10px'
               }}
             >
-        <select
+        {/* <select
           value={searchType}
           onChange={(e) => setSearchType(e.target.value as 'item' | 'music' | 'ambiance')}
           style={{
@@ -1483,7 +1553,7 @@ async function openBarFullModal(bar: Bar){
           <option value="ambiance">Ambiance</option>
           <option value="item">Item</option>
           <option value="music">Musique</option>
-        </select>
+        </select> */}
         <div style={{ position: 'relative', flex: 1 }}>
           <input
             value={searchTerm}
@@ -1561,6 +1631,40 @@ async function openBarFullModal(bar: Bar){
           )}
         </div>
       </div>
+      
+    {/* Bouton filtre bars */}
+    <div style={{
+      position:'absolute', bottom:120, right:12, zIndex:30,
+      display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6
+    }}>
+      <button
+        onClick={()=>{
+          setBarFilter(f => f==='all' ? 'open' : f==='open' ? 'open_or_soon' : 'all');
+        }}
+        style={{
+          minWidth:"250px",   // largeur fixe pour tous les états
+          padding:'12px 18px',
+          borderRadius:16,
+          background:'rgba(20,25,45,0.6)',
+          border:'1px solid rgba(255,255,255,0.15)',
+          color:'#fff',
+          fontWeight:800,
+          fontSize:15,
+          textAlign:'center',
+          cursor:'pointer',
+          backdropFilter:'blur(10px)',
+          boxShadow:'0 4px 12px rgba(0,0,0,0.4)',
+          transition:'all .25s ease'
+        }}
+        onMouseEnter={e=>{(e.currentTarget.style.background='rgba(40,50,80,0.8)')}}
+        onMouseLeave={e=>{(e.currentTarget.style.background='rgba(20,25,45,0.6)')}}
+      >
+        {barFilter==='all' ? 'Tous 🟢🟠🔴' :
+        barFilter==='open' ? 'Ouverts 🟢' : 'Ouverts Aujourd\'hui 🟢🟠'}
+      </button>
+    </div>
+
+
 
       {/* conteneur carte */}
       <div
@@ -1848,30 +1952,36 @@ async function openBarFullModal(bar: Bar){
           <div className="kpsule-fs">
             <button className="kpsule-close" onClick={()=>setShowBarModalFS(false)}>✕</button>
 
-            {/* Header + Tabs */}
-            <div className="kpsule-fs-head">
-              <div className="kpsule-fs-tabs" role="tablist" aria-label="Bar details">
-                {(['infos','musique','menu','events'] as const).map(t=>(
-                  <button
-                    key={t}
-                    className="kpsule-tab"
-                    role="tab"
-                    aria-selected={activeTab===t}
-                    onClick={()=>setActiveTab(t)}
-                  >
-                    {t==='infos'?'Infos':t==='musique'?'Musique':t==='menu'?'Menu':'Évènements'}
-                  </button>
-                ))}
-              </div>
+          {/* Header + Tabs */}
+          <div
+            className="kpsule-fs-head"
+            style={{display:'flex', flexDirection:'column', alignItems:'center', gap:8}}
+          >
+            {/* Nom du bar */}
+            <div style={{fontWeight:900, textAlign:"center", fontSize:22}}>
+              {(selectedBar.bar_name || selectedBar.name) || '—'}
             </div>
+
+            {/* Tabs */}
+            <div className="kpsule-fs-tabs" role="tablist" aria-label="Bar details">
+              {(['infos','musique','menu','events'] as const).map(t=>(
+                <button
+                  key={t}
+                  className="kpsule-tab"
+                  role="tab"
+                  aria-selected={activeTab===t}
+                  onClick={()=>setActiveTab(t)}
+                  style={{ fontSize: "18px", fontWeight: 800 }}
+                >
+                  {t==='infos'?'Infos':t==='musique'?'Musique':t==='menu'?'Menu':'Évènements'}
+                </button>
+              ))}
+            </div>
+          </div>
+
 
             {/* Body */}
             <div className="kpsule-fs-body">
-                  <div>
-                    <div style={{opacity:1,fontWeight:900, textAlign: "center",padding:8,fontSize:22}}>
-                      {(selectedBar.bar_name || selectedBar.name) || '—'}
-                    </div>
-                  </div>
               {/* INFOS */}
               {activeTab==='infos' && (
 

@@ -59,6 +59,7 @@ export default function UpcomingEvents({ open = false, onClose }: Props) {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
         const j = await res.json();
         setEvents(j?.events ?? []);
+        console.log(j);
       } catch (e: any) {
         if (e?.name !== "AbortError")
           setError(e?.message ?? "Erreur de chargement");
@@ -202,7 +203,11 @@ export default function UpcomingEvents({ open = false, onClose }: Props) {
                 gap: 12,
               }}
             >
-              {visibleEvents.map((ev) => (
+            {visibleEvents.map((ev) => {
+              const isInternal = (ev as any).source_type === "internal"; // 👈 distinction
+
+              return (
+                
                 <a
                   key={ev.id}
                   href={ev.url || "#"}
@@ -212,15 +217,38 @@ export default function UpcomingEvents({ open = false, onClose }: Props) {
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,
-                    background: "rgba(13,18,36,.6)",
-                    border: "1px solid #22304a",
+                    background: isInternal
+                      ? "linear-gradient(135deg,#ff0080,#7928ca)" // flashy
+                      : "rgba(13,18,36,.6)",
+                    border: isInternal ? "2px solid #ff66cc" : "1px solid #22304a",
                     borderRadius: 14,
                     overflow: "hidden",
                     textDecoration: "none",
                     color: "#fff",
-                    boxShadow: "0 8px 22px rgba(0,0,0,.35)",
+                    boxShadow: isInternal
+                      ? "0 0 20px rgba(255,0,128,.6)"
+                      : "0 8px 22px rgba(0,0,0,.35)",
+                    transform: isInternal ? "scale(1.02)" : "none",
+                    transition: "all .25s ease",
                   }}
                 >
+                    {isInternal && (<div
+                    style={{
+                      position: "absolute",
+                      top: 35,
+                      right: -40,
+                      transform: "rotate(45deg)",
+                      background: "linear-gradient(90deg,#ff0080,#7928ca)",
+                      color: "#fff",
+                      fontSize: 12,
+                      fontWeight: 900,
+                      padding: "4px 50px",
+                      boxShadow: "0 0 12px rgba(0,0,0,.4)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Exclusivité Assa
+                  </div>)}
                   {ev.image_url && (
                     <img
                       src={ev.image_url}
@@ -229,6 +257,7 @@ export default function UpcomingEvents({ open = false, onClose }: Props) {
                         width: "100%",
                         height: 150,
                         objectFit: "cover",
+                        borderBottom: isInternal ? "2px solid #ff66cc" : "none",
                       }}
                     />
                   )}
@@ -241,6 +270,8 @@ export default function UpcomingEvents({ open = false, onClose }: Props) {
                         fontWeight: 900,
                         lineHeight: 1.15,
                         margin: "6px 0",
+                        fontSize: isInternal ? 18 : 16,
+                        textShadow: isInternal ? "0 0 8px rgba(255,0,128,.8)" : "none",
                       }}
                     >
                       {ev.name}
@@ -250,20 +281,16 @@ export default function UpcomingEvents({ open = false, onClose }: Props) {
                       {ev.venue_city ? ` · ${ev.venue_city}` : ""}
                     </div>
                     {ev.segment && (
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 6,
-                          marginTop: 8,
-                          alignItems: "center",
-                        }}
-                      >
+                      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                         <span
                           style={{
                             fontSize: 12,
                             padding: "2px 8px",
-                            border: "1px solid #22304a",
+                            border: isInternal ? "1px solid #ff66cc" : "1px solid #22304a",
                             borderRadius: 999,
+                            background: isInternal
+                              ? "rgba(255,0,128,.15)"
+                              : "transparent",
                           }}
                         >
                           {ev.segment}
@@ -272,7 +299,9 @@ export default function UpcomingEvents({ open = false, onClose }: Props) {
                     )}
                   </div>
                 </a>
-              ))}
+              );
+            })}
+
 
               {visibleEvents.length === 0 && (
                 <div

@@ -11,6 +11,7 @@ import AdminBars from "./AdminBars";
 import FiddlesDirections from "./Directions";
 import Callback from "./callback"; 
 import BarTender from "./BarTender";
+import PublicTickets from "./PublicTickets";
 
 const Index = () => {
   const { token, checkAuth } = useAuthStore();
@@ -41,6 +42,7 @@ const Index = () => {
           path="/dashboard" 
           element={token ? <Dashboard /> : <Navigate to="/login" />} 
         />
+        <Route path="/events/:eventId/tickets" element={<PublicTickets />} />
         <Route path="/bartender/:pos_id" element={<BarTender />} />
         <Route path="/bar/:barId" element={<PublicBar />} />
         <Route path="/map" element={<PublicMap />} />
